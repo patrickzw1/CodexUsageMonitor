@@ -19,9 +19,19 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
+function Get-RelativeChildPath([string]$Root, [string]$Path) {
+    $normalizedRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd([char[]]@('\', '/'))
+    $normalizedPath = [System.IO.Path]::GetFullPath($Path)
+    $rootPrefix = $normalizedRoot + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $normalizedPath.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Path is outside the expected root.'
+    }
+    return $normalizedPath.Substring($rootPrefix.Length)
+}
+
 function Get-StreamHash([System.IO.Stream]$Stream) {
     $algorithm = [System.Security.Cryptography.SHA256]::Create()
-    try { return [Convert]::ToHexString($algorithm.ComputeHash($Stream)).ToLowerInvariant() }
+    try { return ([BitConverter]::ToString($algorithm.ComputeHash($Stream))).Replace('-', '').ToLowerInvariant() }
     finally { $algorithm.Dispose() }
 }
 
@@ -106,7 +116,7 @@ try {
         throw "ZIP/package file-count mismatch: ZIP=$($entries.Count), package=$($packageFiles.Count)"
     }
     foreach ($file in $packageFiles) {
-        $relative = [System.IO.Path]::GetRelativePath($PackageDirectory, $file.FullName).Replace('\', '/')
+        $relative = (Get-RelativeChildPath $PackageDirectory $file.FullName).Replace('\', '/')
         $entry = $archive.GetEntry("$PackageRootName/$relative")
         if ($null -eq $entry) { throw "Package file was not archived: $relative" }
         $stream = $entry.Open()
@@ -122,7 +132,7 @@ try {
         throw 'Publish output is not the required multi-file layout.'
     }
     foreach ($file in $publishedFiles) {
-        $relative = [System.IO.Path]::GetRelativePath($PublishedDirectory, $file.FullName).Replace('\', '/')
+        $relative = (Get-RelativeChildPath $PublishedDirectory $file.FullName).Replace('\', '/')
         $stagedPath = Join-Path $PackageDirectory $relative.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
         if (-not (Test-Path -LiteralPath $stagedPath -PathType Leaf) -or -not $zippedHashes.ContainsKey($relative)) {
             throw "Published file was not included in package staging and ZIP: $relative"

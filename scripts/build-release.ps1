@@ -20,6 +20,16 @@ foreach ($invalidFixture in @("0.1.0`n", "0.1.0`r", '0.1.0 ', '01.0.0')) {
 if ($Version -notmatch $semVer) { throw 'Version must be a valid SemVer 2.0 value without a v prefix.' }
 
 $repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+function Get-RelativeChildPath([string]$Root, [string]$Path) {
+    $normalizedRoot = [System.IO.Path]::GetFullPath($Root).TrimEnd([char[]]@('\', '/'))
+    $normalizedPath = [System.IO.Path]::GetFullPath($Path)
+    $rootPrefix = $normalizedRoot + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $normalizedPath.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Path is outside the expected root.'
+    }
+    return $normalizedPath.Substring($rootPrefix.Length)
+}
+
 function Get-SourceState {
     $head = (& git -C $repositoryRoot rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $head -notmatch '\A[0-9a-f]{40}\z') { throw 'Unable to resolve release commit SHA.' }
@@ -221,7 +231,7 @@ function Assert-NoPrivateBuildData([string]$root) {
     }
 
     foreach ($file in $files) {
-        $relative = [System.IO.Path]::GetRelativePath($root, $file.FullName)
+        $relative = Get-RelativeChildPath $root $file.FullName
         if ($file.Name -match '(?i)\A(?:\.env(?:\..*)?|auth\.json|credentials\.json|cookie\.json|session\.json|secrets\.json|id_rsa(?:\..*)?)\z' -or
             $file.Name -match '(?i)\.(?:pdb|jsonl|pem|key|pfx|p12|snk|db(?:-(?:wal|shm))?|sqlite|sqlite3|log)\z') {
             throw "Forbidden file in package: $relative"
@@ -255,7 +265,7 @@ $archive = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compressio
 try {
     $fixedTimestamp = [System.DateTimeOffset]::new(2026, 1, 1, 0, 0, 0, [System.TimeSpan]::Zero)
     foreach ($file in Get-ChildItem -LiteralPath $packageDirectory -File -Recurse | Sort-Object FullName) {
-        $relative = [System.IO.Path]::GetRelativePath($packageDirectory, $file.FullName).Replace('\', '/')
+        $relative = (Get-RelativeChildPath $packageDirectory $file.FullName).Replace('\', '/')
         $entry = $archive.CreateEntry("$packageRootName/$relative", [System.IO.Compression.CompressionLevel]::Optimal)
         $entry.LastWriteTime = $fixedTimestamp
         $input = $file.OpenRead()
