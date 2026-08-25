@@ -1,0 +1,112 @@
+<UserControl x:Class="CodexUsageMonitor.Views.ModelsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:CodexUsageMonitor.Controls">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="22,4,22,22">
+            <Grid Margin="2,0,2,12">
+                <StackPanel>
+                    <TextBlock Text="模型用量" FontSize="20" FontWeight="SemiBold" />
+                    <TextBlock Text="按本地 rollout 聚合模型、缓存与 API 等价成本" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,3,0,0" />
+                </StackPanel>
+                <Border HorizontalAlignment="Right" VerticalAlignment="Center" Background="{DynamicResource RangeHostBrush}" CornerRadius="13" Padding="3">
+                    <UniformGrid Columns="3" Width="190">
+                        <ToggleButton Content="今天" Style="{StaticResource RangeToggle}" IsChecked="{Binding IsTodaySelected, Mode=OneWay}" Command="{Binding SelectTodayCommand}" />
+                        <ToggleButton Content="7 天" Style="{StaticResource RangeToggle}" IsChecked="{Binding IsSevenDaySelected, Mode=OneWay}" Command="{Binding SelectSevenDayCommand}" />
+                        <ToggleButton Content="30 天" Style="{StaticResource RangeToggle}" IsChecked="{Binding IsThirtyDaySelected, Mode=OneWay}" Command="{Binding SelectThirtyDayCommand}" />
+                    </UniformGrid>
+                </Border>
+            </Grid>
+
+            <Grid Margin="0,0,0,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="10" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border Style="{StaticResource GlassCard}" Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="Tokens" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{Binding ModelRangeTokens}" FontSize="24" FontWeight="SemiBold" Margin="0,3,0,0" />
+                        <TextBlock Text="{Binding ModelRangeLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" Style="{StaticResource GlassCard}" Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="已定价模型成本" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{Binding ModelRangeCost}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" Margin="0,3,0,0" />
+                        <TextBlock Text="{Binding ModelPricingStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="4" Style="{StaticResource GlassCard}" Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="缓存命中" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{Binding ModelRangeCacheHit}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource GreenBrush}" Margin="0,3,0,0" />
+                        <TextBlock Text="输入 Tokens" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
+                <StackPanel>
+                    <TextBlock Text="模型排行" Style="{StaticResource SectionHeader}" />
+                    <ItemsControl ItemsSource="{Binding Models}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,13">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Ellipse Width="8" Height="8" Fill="{Binding Color}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <TextBlock Text="{Binding Model}" FontFamily="Cascadia Mono, Consolas" FontSize="12" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding Cache}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="10,1,0,0" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Tokens}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding ShareText}" Foreground="{DynamicResource MutedBrush}" Margin="10,0,0,0" Width="34" TextAlignment="Right" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <ProgressBar Grid.Row="1" Style="{StaticResource FlatProgressBar}" Value="{Binding SharePercent, Mode=OneWay}" Maximum="100" Foreground="{Binding Color}" Margin="0,7,0,0" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Background="{DynamicResource InsetBrush}" CornerRadius="10" Padding="14"
+                            Visibility="{Binding HasModelRows, Converter={StaticResource InverseBoolToVisibility}}">
+                        <TextBlock Text="这个时间段还没有本地模型用量。" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource GlassCard}">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <controls:ModelDonutChart Width="205" Height="205" ItemsSource="{Binding Models}" TotalText="{Binding ModelRangeTokens}"
+                                              Track="{DynamicResource ProgressTrackBrush}" />
+                    <StackPanel Grid.Column="1" Margin="20,4,0,0">
+                        <TextBlock Text="用量组成" Style="{StaticResource SectionHeader}" />
+                        <TextBlock Text="{Binding ModelRangeLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,-5,0,11" />
+                        <ItemsControl ItemsSource="{Binding Models}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Height="27">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                        <Ellipse Width="8" Height="8" Fill="{Binding Color}" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Model}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" FontSize="11" />
+                                        <TextBlock Grid.Column="2" Text="{Binding ShareText}" HorizontalAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

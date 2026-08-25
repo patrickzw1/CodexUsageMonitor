@@ -1,0 +1,132 @@
+<UserControl x:Class="CodexUsageMonitor.Views.OverviewView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:CodexUsageMonitor.Controls">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="22,4,22,22">
+            <Border Background="{DynamicResource WarningPanelBrush}" BorderBrush="{DynamicResource WarningBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,9" Margin="0,0,0,12"
+                    Visibility="{Binding HasWarning, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{Binding Warning}" Foreground="{DynamicResource WarningTextBrush}" FontSize="11" TextWrapping="Wrap" />
+            </Border>
+
+            <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14" Padding="20">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="188" /><ColumnDefinition Width="1" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <Grid Width="166" Height="166" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <controls:CircularProgress Value="{Binding WeeklyRemaining}" Fill="{DynamicResource IndigoBrush}" Track="{DynamicResource IndigoTrackBrush}" />
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <TextBlock Text="本周剩余" FontSize="12" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                            <TextBlock Text="{Binding WeeklyRemainingText}" FontSize="40" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" HorizontalAlignment="Center" Margin="0,-1,0,0" />
+                            <TextBlock Text="{Binding WeeklyResetText}" FontSize="11" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Grid>
+                    <Border Grid.Column="1" Background="{DynamicResource LineBrush}" Margin="0,8" />
+                    <StackPanel Grid.Column="2" Margin="22,8,0,0">
+                        <TextBlock Text="额度节奏" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{Binding PaceText}" FontSize="17" FontWeight="SemiBold" Margin="0,5,0,0" TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{DynamicResource IndigoBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PaceWillExhaust}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource AmberBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Text="{Binding PaceDetailText}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,5,0,12" TextWrapping="Wrap" />
+                        <UniformGrid Columns="7" Margin="0,0,0,2">
+                            <TextBlock Text="第1天" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                            <TextBlock Text="第2天" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                            <TextBlock Text="第3天" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                            <TextBlock Text="第4天" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                            <TextBlock Text="第5天" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                            <TextBlock Text="第6天" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                            <TextBlock Text="第7天" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                        </UniformGrid>
+                        <controls:WeeklyPaceBar Height="34" UsedPercent="{Binding PaceUsedPercent}" ElapsedPercent="{Binding PaceElapsedPercent}" WillExhaust="{Binding PaceWillExhaust}"
+                                                Track="{DynamicResource ProgressTrackBrush}" Remaining="{DynamicResource BlueBrush}" Warning="{DynamicResource AmberBrush}"
+                                                Consumed="{DynamicResource PaceConsumedBrush}" Divider="{DynamicResource PaceDividerBrush}" Marker="{DynamicResource PaceMarkerBrush}" />
+                        <TextBlock Text="{Binding PaceWindowText}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14"
+                    Visibility="{Binding SparkVisible, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,9">
+                        <TextBlock Text="Codex Spark 限额" FontWeight="SemiBold" FontSize="15" />
+                        <Border HorizontalAlignment="Right" Background="{DynamicResource IndigoSubtleBrush}" CornerRadius="8" Padding="8,3">
+                            <TextBlock Text="PRO+" Foreground="{DynamicResource IndigoBrush}" FontSize="11" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                    <Grid Margin="0,5" Visibility="{Binding SparkFiveHourVisible, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="112" /><ColumnDefinition Width="*" /><ColumnDefinition Width="70" /></Grid.ColumnDefinitions>
+                        <StackPanel><TextBlock Text="5 小时窗口" FontWeight="SemiBold" /><TextBlock Text="{Binding SparkFiveReset}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
+                        <ProgressBar Grid.Column="1" Style="{StaticResource FlatProgressBar}" Value="{Binding SparkFiveRemainingPercent, Mode=OneWay}" Maximum="100" Margin="12,0" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="{Binding SparkFiveRemaining}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource BlueBrush}" FontWeight="SemiBold" />
+                    </Grid>
+                    <Grid Margin="0,7,0,0" Visibility="{Binding SparkWeeklyVisible, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="112" /><ColumnDefinition Width="*" /><ColumnDefinition Width="70" /></Grid.ColumnDefinitions>
+                        <StackPanel><TextBlock Text="每周窗口" FontWeight="SemiBold" /><TextBlock Text="{Binding SparkWeeklyReset}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
+                        <ProgressBar Grid.Column="1" Style="{StaticResource FlatProgressBar}" Value="{Binding SparkWeeklyRemainingPercent, Mode=OneWay}" Maximum="100" Margin="12,0" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="2" Text="{Binding SparkWeeklyRemaining}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource BlueBrush}" FontWeight="SemiBold" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Button Style="{StaticResource CardButton}" Command="{Binding ShowResetDetailsCommand}" Margin="0,0,0,14">
+                <Grid Margin="17,14">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <Border Width="38" Height="38" Background="{DynamicResource AmberSubtleBrush}" CornerRadius="12">
+                        <TextBlock Text="&#xED7D;" FontFamily="{StaticResource FluentIconFont}" FontSize="20" Foreground="{DynamicResource AmberBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="重置卡" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding ResetSummary}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ResetCreditCountText}" Foreground="{DynamicResource AmberBrush}" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="&#xF182;" FontFamily="{StaticResource FluentIconFont}" Foreground="{DynamicResource MutedBrush}" Margin="8,1,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Button>
+
+            <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="1" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="本月已定价模型成本" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{Binding MonthCost}" FontSize="31" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" Margin="0,3,0,0" />
+                        <TextBlock Text="{Binding PricingStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,12,0" />
+                    </StackPanel>
+                    <Border Grid.Column="1" Background="{DynamicResource LineBrush}" Margin="0,2" />
+                    <StackPanel Grid.Column="2" Margin="22,0,0,0">
+                        <TextBlock Text="缓存命中" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{Binding CacheHit}" FontSize="31" FontWeight="SemiBold" Foreground="{DynamicResource GreenBrush}" Margin="0,3,0,0" />
+                        <TextBlock Text="{Binding CacheSavings}" Foreground="{DynamicResource GreenBrush}" FontSize="11" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border Style="{StaticResource GlassCard}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,10">
+                        <TextBlock Text="Token 组成 · 本月" FontWeight="SemiBold" FontSize="15" />
+                        <TextBlock Text="{Binding MonthTokens}" HorizontalAlignment="Right" Foreground="{DynamicResource IndigoBrush}" FontSize="15" FontWeight="SemiBold" />
+                    </Grid>
+                    <controls:TokenCompositionBar Height="14" UncachedInput="{Binding UncachedPercent}" CachedInput="{Binding CachedPercent}" Output="{Binding OutputPercent}" Reasoning="{Binding ReasoningPercent}"
+                                                  Track="{DynamicResource ProgressTrackBrush}" />
+                    <UniformGrid Columns="4" Margin="0,10,0,0">
+                        <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="#0FA9CB" Margin="0,0,5,0" /><TextBlock Text="非缓存" FontSize="11" /></StackPanel><TextBlock Text="{Binding UncachedLegend}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
+                        <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="{DynamicResource VioletBrush}" Margin="0,0,5,0" /><TextBlock Text="缓存" FontSize="11" /></StackPanel><TextBlock Text="{Binding CachedLegend}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
+                        <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="{DynamicResource BlueBrush}" Margin="0,0,5,0" /><TextBlock Text="输出" FontSize="11" /></StackPanel><TextBlock Text="{Binding OutputLegend}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
+                        <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="#F59E0B" Margin="0,0,5,0" /><TextBlock Text="推理" FontSize="11" /></StackPanel><TextBlock Text="{Binding ReasoningLegend}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
+                    </UniformGrid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

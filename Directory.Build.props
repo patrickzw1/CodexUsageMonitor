@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <DeterministicSourcePaths>true</DeterministicSourcePaths>
+    <PathMap>$(MSBuildProjectDirectory)=/_/$(MSBuildProjectName)</PathMap>
+    <DebugType>portable</DebugType>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <Version Condition="'$(Version)' == ''">0.1.0</Version>
+    <InformationalVersion Condition="'$(InformationalVersion)' == ''">$(Version)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

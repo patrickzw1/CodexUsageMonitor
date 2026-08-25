@@ -1,0 +1,115 @@
+<Window x:Class="CodexUsageMonitor.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:CodexUsageMonitor.Views"
+        Title="Codex 用量"
+        Icon="Assets/AppIcon.ico"
+        Width="536"
+        Height="950"
+        MinWidth="500"
+        MinHeight="660"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="False"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True">
+    <Border x:Name="WindowFrame"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource FrameBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="18"
+            ClipToBounds="True">
+        <Grid>
+            <Grid Visibility="{Binding IsMainShellVisible, Converter={StaticResource BoolToVisibility}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Margin="22,16,18,12" Background="Transparent" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Codex 用量" FontSize="22" FontWeight="SemiBold" />
+                        <Border Height="24" MinWidth="43" Background="{DynamicResource IndigoSubtleBrush}" CornerRadius="8" Margin="9,0,0,0" Padding="8,0">
+                            <TextBlock Text="{Binding PlanDisplay}" Foreground="{DynamicResource IndigoBrush}" FontSize="11" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" />
+                        </Border>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="7" Height="7" Fill="{Binding SyncStatusBrush}" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding SyncText}" Foreground="{DynamicResource MutedBrush}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <Button Style="{StaticResource IconButton}" Click="MinimizeButton_Click" ToolTip="最小化到托盘">
+                            <TextBlock Text="&#xEBD0;" FontFamily="{StaticResource FluentIconFont}" FontSize="18" />
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Command="{Binding RefreshCommand}" ToolTip="刷新数据">
+                            <TextBlock Text="&#xF194;" FontFamily="{StaticResource FluentIconFont}" FontSize="18" />
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Command="{Binding ToggleThemeCommand}" ToolTip="{Binding ThemeToolTip}">
+                            <TextBlock Text="{Binding ThemeIcon}" FontFamily="{StaticResource UiFont}" FontSize="18" FontWeight="SemiBold" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="1" Background="{DynamicResource TabHostBrush}" CornerRadius="16" Padding="3" Margin="22,0,22,12">
+                    <UniformGrid Columns="3">
+                        <ToggleButton Content="总览" Style="{StaticResource SegmentedTab}" IsChecked="{Binding IsOverviewVisible, Mode=OneWay}" Command="{Binding ShowOverviewCommand}" />
+                        <ToggleButton Content="模型" Style="{StaticResource SegmentedTab}" IsChecked="{Binding IsModelsVisible, Mode=OneWay}" Command="{Binding ShowModelsCommand}" />
+                        <ToggleButton Content="历史" Style="{StaticResource SegmentedTab}" IsChecked="{Binding IsHistoryVisible, Mode=OneWay}" Command="{Binding ShowHistoryCommand}" />
+                    </UniformGrid>
+                </Border>
+
+                <Grid Grid.Row="2">
+                    <views:OverviewView Visibility="{Binding IsOverviewVisible, Converter={StaticResource BoolToVisibility}}" />
+                    <views:ModelsView Visibility="{Binding IsModelsVisible, Converter={StaticResource BoolToVisibility}}" />
+                    <views:HistoryView Visibility="{Binding IsHistoryVisible, Converter={StaticResource BoolToVisibility}}" />
+                </Grid>
+
+                <Border Grid.Row="3" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource ChromeBrush}">
+                    <Grid Margin="20,8,16,8">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="本地优先" FontSize="11" Foreground="{DynamicResource MutedBrush}" />
+                            <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedBrush}" Margin="7,0" />
+                            <TextBlock Text="每 15 分钟自动刷新" FontSize="11" Foreground="{DynamicResource MutedBrush}" />
+                            <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedBrush}" Margin="7,0" />
+                            <TextBlock Text="价格每次启动校准" FontSize="11" Foreground="{DynamicResource MutedBrush}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button Style="{StaticResource PillActionButton}" Command="{Binding OpenDataFolderCommand}" ToolTip="打开数据目录">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <Grid Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Path Data="M 1.5,3 L 5,3 L 6.2,4.4 L 10.5,4.4 L 10.5,9.5 L 1.5,9.5 Z"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                              StrokeThickness="1.2" StrokeLineJoin="Round" />
+                                    </Grid>
+                                    <TextBlock Grid.Column="1" Text="数据" VerticalAlignment="Center" Margin="6,0,0,0" />
+                                </Grid>
+                            </Button>
+                            <Button Style="{StaticResource PillActionButton}" Command="{Binding QuitCommand}" ToolTip="退出应用" Margin="8,0,0,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <Grid Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Line X1="2" Y1="2" X2="10" Y2="10"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                              StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                        <Line X1="10" Y1="2" X2="2" Y2="10"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                              StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Grid>
+                                    <TextBlock Grid.Column="1" Text="退出" VerticalAlignment="Center" Margin="6,0,0,0" />
+                                </Grid>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <views:ResetCardsView Visibility="{Binding IsResetDetailsVisible, Converter={StaticResource BoolToVisibility}}" />
+        </Grid>
+    </Border>
+</Window>

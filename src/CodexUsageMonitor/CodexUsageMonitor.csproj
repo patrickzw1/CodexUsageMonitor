@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\CodexUsageMonitor.Core\CodexUsageMonitor.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <RuntimeFrameworkVersion>8.0.30</RuntimeFrameworkVersion>
+    <TargetLatestRuntimePatch>false</TargetLatestRuntimePatch>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\AppIcon.ico" />
+    <Resource Include="Assets\FluentSystemIcons-Regular.ttf" />
+  </ItemGroup>
+
+</Project>

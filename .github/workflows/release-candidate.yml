@@ -1,0 +1,87 @@
+name: Release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: SemVer without the v prefix
+        required: true
+        type: string
+      attest:
+        description: Create a GitHub artifact attestation
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    permissions:
+      contents: read
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: 8.0.424
+          cache: true
+          cache-dependency-path: "**/packages.lock.json"
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $version = if ($env:EVENT_NAME -eq 'push') {
+            $env:REF_NAME -replace '^v', ''
+          } else {
+            $env:INPUT_VERSION
+          }
+          $semVer = '\A(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\z'
+          if ($version -notmatch $semVer) {
+            throw "Invalid release version."
+          }
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Build unsigned release candidate
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.value }}
+        run: ./scripts/build-release.ps1 -Version $env:RELEASE_VERSION
+
+      - name: Upload candidate artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: CodexUsageMonitor-${{ steps.version.outputs.value }}-win-x64
+          path: |
+            dist/CodexUsageMonitor-${{ steps.version.outputs.value }}-win-x64.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+  attest:
+    if: github.event_name == 'workflow_dispatch' && inputs.attest
+    needs: build
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download candidate artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: CodexUsageMonitor-${{ needs.build.outputs.version }}-win-x64
+          path: dist
+
+      - name: Attest candidate ZIP
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: dist/CodexUsageMonitor-${{ needs.build.outputs.version }}-win-x64.zip
