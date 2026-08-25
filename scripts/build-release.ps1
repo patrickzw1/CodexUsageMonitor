@@ -245,7 +245,7 @@ function Assert-NoPrivateBuildData([string]$root) {
             [System.Text.Encoding]::BigEndianUnicode.GetString($bytes))
         foreach ($text in $representations) {
             foreach ($literal in $privateBuildPaths) {
-                if ($text.Contains($literal, [StringComparison]::OrdinalIgnoreCase)) {
+                if ($text.IndexOf($literal, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
                     throw "Private build path detected in package file: $relative"
                 }
             }
