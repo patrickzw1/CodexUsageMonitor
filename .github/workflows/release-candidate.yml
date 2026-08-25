@@ -103,6 +103,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_VERSION: ${{ needs.build.outputs.version }}
         run: |
           $zip = "dist/CodexUsageMonitor-$env:RELEASE_VERSION-win-x64.zip"
