@@ -1,3 +1,5 @@
+[简体中文](README.md) | [English](README.en.md)
+
 # Codex Usage Monitor
 
 Windows 原生系统托盘应用，用本地 Codex 记录和官方 `codex app-server` 汇总使用情况。
@@ -35,6 +37,19 @@ Windows 原生系统托盘应用，用本地 Codex 记录和官方 `codex app-se
 > `account/read`、`account/rateLimits/read` 和 `account/usage/read` 是本机 Codex app-server 的可变协议依赖，不属于本项目能够保证稳定兼容的公开 API。周额度、Spark、重置卡、汇总和每日用量分别判断响应完整性；方法不存在、空数组、字段变化或进程启动失败时，只把受影响分区标为“不可用”或展示带时间的上次成功值，本地 rollout Token/成本刷新仍会继续。
 
 安全边界：应用不会从任意 `PATH` 目录执行同名程序。环境变量 `CODEX_USAGE_MONITOR_CODEX_PATH` 只接受绝对本地路径，默认候选限制在 Codex 安装/本地复制目录并校验 OpenAI 发布者签名。app-server 单个 stdout JSON 帧上限为 1 MiB 字符，stderr 只保留 64 KiB；六个官方价格响应各自限制为 2 MiB；rollout 单行上限为 1 MiB，并分批持久化。
+
+## 下载与校验
+
+首个版本标签发布后，普通用户可从 [GitHub Releases 最新版本](https://github.com/patrickzw1/CodexUsageMonitor/releases/latest) 下载版本化的 Windows 便携 ZIP 和 `SHA256SUMS.txt`。如果 Releases 仍为空，表示项目尚未发布可直接下载的版本。
+
+下载后可在文件所在目录核对 SHA-256（下面以 `0.1.0` 为例）：
+
+```powershell
+Get-FileHash .\CodexUsageMonitor-0.1.0-win-x64.zip -Algorithm SHA256
+Get-Content .\SHA256SUMS.txt
+```
+
+两处哈希应一致。GitHub 自动生成的 **Source code (zip/tar.gz)** 只是源码快照，不是可直接运行的软件；普通用户应下载 Release assets 中由本项目生成的便携 ZIP。
 
 ## 开发与运行
 
