@@ -134,7 +134,7 @@
                    Closed="SettingsPopup_Closed">
                 <Border Width="318"
                         Padding="16"
-                        Background="{DynamicResource CardBrush}"
+                        Background="{DynamicResource SettingsPanelBrush}"
                         BorderBrush="{DynamicResource CardHoverBorderBrush}"
                         BorderThickness="1"
                         CornerRadius="16">
@@ -237,9 +237,11 @@
                                 </TextBlock>
                                 <Button x:Name="CloseUpdateButton"
                                         Grid.Column="1"
+                                        TabIndex="2"
                                         Style="{StaticResource IconButton}"
                                         Width="28"
                                         Height="28"
+                                        Click="UpdatePopupActionButton_Click"
                                         Command="{Binding CloseUpdateFlyoutCommand}"
                                         ToolTip="{DynamicResource LocClose}">
                                     <TextBlock Text="×" FontFamily="{StaticResource UiFont}" FontSize="20" />
@@ -252,11 +254,14 @@
                                        Margin="0,5,0,16" />
                             <Button x:Name="ViewUpdateButton"
                                     Grid.Row="2"
+                                    TabIndex="0"
                                     Content="{DynamicResource LocViewUpdate}"
                                     Style="{StaticResource UpdatePrimaryButton}"
+                                    Click="UpdatePopupActionButton_Click"
                                     Command="{Binding ViewUpdateCommand}" />
                             <Button x:Name="RemindLaterButton"
                                     Grid.Row="3"
+                                    TabIndex="1"
                                     Content="{DynamicResource LocRemindLater}"
                                     Style="{StaticResource CompactActionButton}"
                                     Foreground="{DynamicResource BlueBrush}"

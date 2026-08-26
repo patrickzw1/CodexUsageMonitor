@@ -43,10 +43,10 @@ Windows 原生系统托盘应用，用本地 Codex 记录和官方 `codex app-se
 
 普通用户可从 [GitHub Releases 最新版本](https://github.com/patrickzw1/CodexUsageMonitor/releases/latest) 下载版本化的 Windows 便携 ZIP 和 `SHA256SUMS.txt`。
 
-下载后可在文件所在目录核对 SHA-256（下面以 `0.2.0` 为例）：
+下载后可在文件所在目录核对 SHA-256（下面以 `0.2.1` 为例）：
 
 ```powershell
-Get-FileHash .\CodexUsageMonitor-0.2.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\CodexUsageMonitor-0.2.1-win-x64.zip -Algorithm SHA256
 Get-Content .\SHA256SUMS.txt
 ```
 
@@ -85,14 +85,14 @@ Windows 11 使用系统 Desktop Acrylic 和原生圆角；不支持该效果的�
 ## 便携发布
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Version 0.2.0
+powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Version 0.2.1
 ```
 
 正式打包拒绝脏工作树。开发中的本地验证必须显式使用 `-Preview`，并建议把输出放在临时目录，避免覆盖已有 `dist`：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 `
-  -Version 0.2.0 -Preview -OutputRoot "$env:TEMP\CodexUsageMonitor-preview"
+  -Version 0.2.1 -Preview -OutputRoot "$env:TEMP\CodexUsageMonitor-preview"
 ```
 
 目标电脑无需安装 Python 或 .NET Runtime；解压版本化 ZIP 后直接运行 `CodexUsageMonitor.exe`。目标电脑需要已经登录并能运行 Codex；统计会读取该电脑自己的本地历史。

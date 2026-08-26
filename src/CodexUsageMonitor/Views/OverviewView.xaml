@@ -12,12 +12,21 @@
             <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14" Padding="20">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="188" /><ColumnDefinition Width="1" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                    <Grid Width="166" Height="166" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Grid x:Name="WeeklyQuotaCircle" Width="166" Height="166" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <controls:CircularProgress Value="{Binding WeeklyRemaining}" Fill="{DynamicResource IndigoBrush}" Track="{DynamicResource IndigoTrackBrush}" />
                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                             <TextBlock Text="{DynamicResource LocWeeklyRemaining}" FontSize="12" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
                             <TextBlock Text="{Binding WeeklyRemainingText}" FontSize="40" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" HorizontalAlignment="Center" Margin="0,-1,0,0" />
-                            <TextBlock Text="{Binding WeeklyResetText}" FontSize="11" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                            <TextBlock x:Name="WeeklyResetText"
+                                       Text="{Binding WeeklyResetText}"
+                                       Width="148"
+                                       FontSize="11"
+                                       LineHeight="14"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                     </Grid>
                     <Border Grid.Column="1" Background="{DynamicResource LineBrush}" Margin="0,8" />
@@ -72,16 +81,36 @@
                         </Border>
                     </Grid>
                     <Grid Margin="0,5" Visibility="{Binding SparkFiveHourVisible, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="112" /><ColumnDefinition Width="*" /><ColumnDefinition Width="70" /></Grid.ColumnDefinitions>
-                        <StackPanel><TextBlock Text="{DynamicResource LocFiveHourWindow}" FontWeight="SemiBold" /><TextBlock Text="{Binding SparkFiveReset}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
-                        <ProgressBar Grid.Column="1" Style="{StaticResource FlatProgressBar}" Value="{Binding SparkFiveRemainingPercent, Mode=OneWay}" Maximum="100" Margin="12,0" VerticalAlignment="Center" />
+                        <TextBlock Text="{DynamicResource LocFiveHourWindow}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <ProgressBar x:Name="SparkFiveProgress" Grid.Column="1" Style="{StaticResource FlatProgressBar}" Value="{Binding SparkFiveRemainingPercent, Mode=OneWay}" Maximum="100" Margin="12,0" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="2" Text="{Binding SparkFiveRemaining}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource BlueBrush}" FontWeight="SemiBold" />
+                        <TextBlock x:Name="SparkFiveResetText"
+                                   Grid.Row="1"
+                                   Grid.ColumnSpan="3"
+                                   Text="{Binding SparkFiveReset}"
+                                   Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="11"
+                                   Margin="0,3,0,0"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding SparkFiveReset}" />
                     </Grid>
                     <Grid Margin="0,7,0,0" Visibility="{Binding SparkWeeklyVisible, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="112" /><ColumnDefinition Width="*" /><ColumnDefinition Width="70" /></Grid.ColumnDefinitions>
-                        <StackPanel><TextBlock Text="{DynamicResource LocWeeklyWindow}" FontWeight="SemiBold" /><TextBlock Text="{Binding SparkWeeklyReset}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
-                        <ProgressBar Grid.Column="1" Style="{StaticResource FlatProgressBar}" Value="{Binding SparkWeeklyRemainingPercent, Mode=OneWay}" Maximum="100" Margin="12,0" VerticalAlignment="Center" />
+                        <TextBlock Text="{DynamicResource LocWeeklyWindow}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <ProgressBar x:Name="SparkWeeklyProgress" Grid.Column="1" Style="{StaticResource FlatProgressBar}" Value="{Binding SparkWeeklyRemainingPercent, Mode=OneWay}" Maximum="100" Margin="12,0" VerticalAlignment="Center" />
                         <TextBlock Grid.Column="2" Text="{Binding SparkWeeklyRemaining}" HorizontalAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource BlueBrush}" FontWeight="SemiBold" />
+                        <TextBlock x:Name="SparkWeeklyResetText"
+                                   Grid.Row="1"
+                                   Grid.ColumnSpan="3"
+                                   Text="{Binding SparkWeeklyReset}"
+                                   Foreground="{DynamicResource MutedBrush}"
+                                   FontSize="11"
+                                   Margin="0,3,0,0"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding SparkWeeklyReset}" />
                     </Grid>
                 </StackPanel>
             </Border>

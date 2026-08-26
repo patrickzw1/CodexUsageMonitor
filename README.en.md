@@ -43,10 +43,10 @@ Security boundary: the app never executes an arbitrary same-named program from `
 
 Regular users can download the versioned Windows portable ZIP and `SHA256SUMS.txt` from the [latest GitHub Release](https://github.com/patrickzw1/CodexUsageMonitor/releases/latest).
 
-After downloading, compare the SHA-256 values in the download directory (using `0.2.0` as an example):
+After downloading, compare the SHA-256 values in the download directory (using `0.2.1` as an example):
 
 ```powershell
-Get-FileHash .\CodexUsageMonitor-0.2.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\CodexUsageMonitor-0.2.1-win-x64.zip -Algorithm SHA256
 Get-Content .\SHA256SUMS.txt
 ```
 
@@ -85,14 +85,14 @@ Windows 11 uses system Desktop Acrylic and native rounded corners. Unsupported s
 ## Portable release
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Version 0.2.0
+powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Version 0.2.1
 ```
 
 Formal packaging rejects a dirty working tree. For local validation during development, pass `-Preview` explicitly and use a temporary output directory so an existing `dist` is not overwritten:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 `
-  -Version 0.2.0 -Preview -OutputRoot "$env:TEMP\CodexUsageMonitor-preview"
+  -Version 0.2.1 -Preview -OutputRoot "$env:TEMP\CodexUsageMonitor-preview"
 ```
 
 The target computer does not need Python or a separately installed .NET Runtime. Extract the versioned ZIP and run `CodexUsageMonitor.exe`. Codex must already be installed and signed in on that computer; the app reads that computer's own local history.

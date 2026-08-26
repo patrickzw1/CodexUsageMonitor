@@ -13,6 +13,7 @@ public partial class MainWindow : System.Windows.Window
 {
     private readonly bool _keepOpen;
     private WpfButton? _settingsAnchor;
+    private bool _returnFocusToUpdateEntry;
 
     public MainWindow(MainViewModel viewModel, bool keepOpen = false)
     {
@@ -77,6 +78,17 @@ public partial class MainWindow : System.Windows.Window
         {
             viewModel.IsUpdateFlyoutOpen = false;
         }
+
+        var returnFocus = _returnFocusToUpdateEntry;
+        _returnFocusToUpdateEntry = false;
+        if (returnFocus && UpdateButton.IsVisible && UpdateButton.IsEnabled)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
+            {
+                FocusManager.SetFocusedElement(FocusManager.GetFocusScope(UpdateButton), UpdateButton);
+                Keyboard.Focus(UpdateButton);
+            });
+        }
     }
 
     private void UpdatePopup_Opened(object? sender, EventArgs e)
@@ -85,6 +97,7 @@ public partial class MainWindow : System.Windows.Window
         {
             if (UpdatePopup.IsOpen)
             {
+                FocusManager.SetFocusedElement(FocusManager.GetFocusScope(ViewUpdateButton), ViewUpdateButton);
                 ViewUpdateButton.Focus();
             }
         });
@@ -94,10 +107,14 @@ public partial class MainWindow : System.Windows.Window
     {
         if (e.Key == System.Windows.Input.Key.Escape)
         {
+            _returnFocusToUpdateEntry = true;
             UpdatePopup.IsOpen = false;
             e.Handled = true;
         }
     }
+
+    private void UpdatePopupActionButton_Click(object sender, RoutedEventArgs e)
+        => _returnFocusToUpdateEntry = true;
 
     public bool AllowClose { get; set; }
 
@@ -127,6 +144,7 @@ public partial class MainWindow : System.Windows.Window
         {
             if (UpdatePopup.IsOpen)
             {
+                _returnFocusToUpdateEntry = true;
                 UpdatePopup.IsOpen = false;
             }
             else if (SettingsPopup.IsOpen)

@@ -33,6 +33,7 @@
         <SolidColorBrush x:Key="LineBrush" Color="{StaticResource LineColor}" po:Freeze="False" />
         <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}" po:Freeze="False" />
         <SolidColorBrush x:Key="CardBrush" Color="{StaticResource CardColor}" po:Freeze="False" />
+        <SolidColorBrush x:Key="SettingsPanelBrush" Color="#FFF9FBFE" po:Freeze="False" />
         <SolidColorBrush x:Key="SubtleBrush" Color="{StaticResource SubtleColor}" po:Freeze="False" />
         <SolidColorBrush x:Key="FrameBorderBrush" Color="#78FFFFFF" po:Freeze="False" />
         <SolidColorBrush x:Key="CardBorderBrush" Color="#9FFFFFFF" po:Freeze="False" />

@@ -20,6 +20,7 @@ internal static class ThemeManager
         ("LineBrush", "#4DD0D7E2", "#52606C80"),
         ("SurfaceBrush", "#E8F5F7FB", "#F0181D27"),
         ("CardBrush", "#BFFDFEFF", "#E9232A36"),
+        ("SettingsPanelBrush", "#FFF9FBFE", "#FF232A36"),
         ("SubtleBrush", "#160F172A", "#28FFFFFF"),
         ("FrameBorderBrush", "#78FFFFFF", "#4DFFFFFF"),
         ("CardBorderBrush", "#9FFFFFFF", "#24FFFFFF"),
