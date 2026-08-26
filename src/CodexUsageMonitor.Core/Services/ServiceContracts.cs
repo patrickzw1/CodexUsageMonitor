@@ -37,6 +37,22 @@ public interface IPriceCatalogService
     Task<PricingSnapshot> RefreshAsync(CancellationToken cancellationToken = default);
 }
 
+public interface IUpdateCheckSettingsStore
+{
+    Task<bool> GetAutoUpdateCheckEnabledAsync(CancellationToken cancellationToken = default);
+    Task SetAutoUpdateCheckEnabledAsync(bool value, CancellationToken cancellationToken = default);
+    Task<UpdateCheckCache> GetUpdateCheckCacheAsync(CancellationToken cancellationToken = default);
+    Task SetUpdateCheckCacheAsync(UpdateCheckCache cache, CancellationToken cancellationToken = default);
+}
+
+public interface IUpdateCheckService
+{
+    Task<bool> GetAutoCheckEnabledAsync(CancellationToken cancellationToken = default);
+    Task SetAutoCheckEnabledAsync(bool value, CancellationToken cancellationToken = default);
+    Task<UpdateCheckResult> CheckAsync(bool force, CancellationToken cancellationToken = default);
+    Task SnoozeAsync(string version, CancellationToken cancellationToken = default);
+}
+
 public interface IDashboardService
 {
     string DatabasePath { get; }
@@ -49,4 +65,6 @@ public interface IDashboardService
     Task SetNotificationsEnabledAsync(bool value, CancellationToken cancellationToken = default);
     Task<bool> GetDarkModeEnabledAsync(CancellationToken cancellationToken = default);
     Task SetDarkModeEnabledAsync(bool value, CancellationToken cancellationToken = default);
+    Task<bool> GetEnglishEnabledAsync(CancellationToken cancellationToken = default);
+    Task SetEnglishEnabledAsync(bool value, CancellationToken cancellationToken = default);
 }

@@ -46,14 +46,17 @@ public sealed record OfficialUsageSnapshot(
 
 public sealed record AppServerCompleteness(
     bool Account,
-    bool GeneralQuota,
+    bool GeneralFiveHourQuota,
+    bool GeneralWeeklyQuota,
     bool SparkQuota,
     bool ResetCreditCount,
     bool ResetCreditDetails,
     bool UsageSummary,
     bool DailyUsage)
 {
-    public static AppServerCompleteness None { get; } = new(false, false, false, false, false, false, false);
+    public bool GeneralQuota => GeneralFiveHourQuota || GeneralWeeklyQuota;
+
+    public static AppServerCompleteness None { get; } = new(false, false, false, false, false, false, false, false);
 }
 
 public sealed record AppServerSnapshot(
@@ -198,6 +201,11 @@ public sealed record DashboardPartitionFreshness(
     DateTimeOffset? DailyUsageUpdatedAt,
     bool IsDailyUsageStale)
 {
+    public DateTimeOffset? GeneralFiveHourQuotaUpdatedAt { get; init; }
+    public bool IsGeneralFiveHourQuotaStale { get; init; }
+    public DateTimeOffset? GeneralWeeklyQuotaUpdatedAt { get; init; }
+    public bool IsGeneralWeeklyQuotaStale { get; init; }
+
     public static DashboardPartitionFreshness Empty { get; } = new(
         null, false, null, false, null, false, null, false, null, false);
 }

@@ -6,14 +6,14 @@
         <StackPanel Margin="22,4,22,22">
             <Grid Margin="2,0,2,12">
                 <StackPanel>
-                    <TextBlock Text="模型用量" FontSize="20" FontWeight="SemiBold" />
-                    <TextBlock Text="按本地 rollout 聚合模型、缓存与 API 等价成本" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,3,0,0" />
+                    <TextBlock Text="{DynamicResource LocModelUsage}" FontSize="20" FontWeight="SemiBold" />
+                    <TextBlock Text="{DynamicResource LocModelUsageDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,3,0,0" />
                 </StackPanel>
                 <Border HorizontalAlignment="Right" VerticalAlignment="Center" Background="{DynamicResource RangeHostBrush}" CornerRadius="13" Padding="3">
                     <UniformGrid Columns="3" Width="190">
-                        <ToggleButton Content="今天" Style="{StaticResource RangeToggle}" IsChecked="{Binding IsTodaySelected, Mode=OneWay}" Command="{Binding SelectTodayCommand}" />
-                        <ToggleButton Content="7 天" Style="{StaticResource RangeToggle}" IsChecked="{Binding IsSevenDaySelected, Mode=OneWay}" Command="{Binding SelectSevenDayCommand}" />
-                        <ToggleButton Content="30 天" Style="{StaticResource RangeToggle}" IsChecked="{Binding IsThirtyDaySelected, Mode=OneWay}" Command="{Binding SelectThirtyDayCommand}" />
+                        <ToggleButton Content="{DynamicResource LocToday}" Style="{StaticResource RangeToggle}" IsChecked="{Binding IsTodaySelected, Mode=OneWay}" Command="{Binding SelectTodayCommand}" />
+                        <ToggleButton Content="{DynamicResource Loc7Days}" Style="{StaticResource RangeToggle}" IsChecked="{Binding IsSevenDaySelected, Mode=OneWay}" Command="{Binding SelectSevenDayCommand}" />
+                        <ToggleButton Content="{DynamicResource Loc30Days}" Style="{StaticResource RangeToggle}" IsChecked="{Binding IsThirtyDaySelected, Mode=OneWay}" Command="{Binding SelectThirtyDayCommand}" />
                     </UniformGrid>
                 </Border>
             </Grid>
@@ -35,23 +35,23 @@
                 </Border>
                 <Border Grid.Column="2" Style="{StaticResource GlassCard}" Padding="14">
                     <StackPanel>
-                        <TextBlock Text="已定价模型成本" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{DynamicResource LocPricedModelCost}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                         <TextBlock Text="{Binding ModelRangeCost}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" Margin="0,3,0,0" />
                         <TextBlock Text="{Binding ModelPricingStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
                 <Border Grid.Column="4" Style="{StaticResource GlassCard}" Padding="14">
                     <StackPanel>
-                        <TextBlock Text="缓存命中" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{DynamicResource LocCacheHit}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                         <TextBlock Text="{Binding ModelRangeCacheHit}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource GreenBrush}" Margin="0,3,0,0" />
-                        <TextBlock Text="输入 Tokens" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{DynamicResource LocInputTokens}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                     </StackPanel>
                 </Border>
             </Grid>
 
             <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
                 <StackPanel>
-                    <TextBlock Text="模型排行" Style="{StaticResource SectionHeader}" />
+                    <TextBlock Text="{DynamicResource LocModelRanking}" Style="{StaticResource SectionHeader}" />
                     <ItemsControl ItemsSource="{Binding Models}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -79,7 +79,7 @@
                     </ItemsControl>
                     <Border Background="{DynamicResource InsetBrush}" CornerRadius="10" Padding="14"
                             Visibility="{Binding HasModelRows, Converter={StaticResource InverseBoolToVisibility}}">
-                        <TextBlock Text="这个时间段还没有本地模型用量。" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
+                            <TextBlock Text="{DynamicResource LocNoModelUsage}" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" />
                     </Border>
                 </StackPanel>
             </Border>
@@ -90,7 +90,7 @@
                     <controls:ModelDonutChart Width="205" Height="205" ItemsSource="{Binding Models}" TotalText="{Binding ModelRangeTokens}"
                                               Track="{DynamicResource ProgressTrackBrush}" />
                     <StackPanel Grid.Column="1" Margin="20,4,0,0">
-                        <TextBlock Text="用量组成" Style="{StaticResource SectionHeader}" />
+                    <TextBlock Text="{DynamicResource LocUsageComposition}" Style="{StaticResource SectionHeader}" />
                         <TextBlock Text="{Binding ModelRangeLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,-5,0,11" />
                         <ItemsControl ItemsSource="{Binding Models}">
                             <ItemsControl.ItemTemplate>

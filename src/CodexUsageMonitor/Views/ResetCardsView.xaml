@@ -6,24 +6,24 @@
 
         <Grid Margin="16,14,18,12">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-            <Button Style="{StaticResource PillActionButton}" Command="{Binding ShowOverviewCommand}" ToolTip="返回总览" VerticalAlignment="Center">
+            <Button Style="{StaticResource PillActionButton}" Command="{Binding ShowOverviewCommand}" ToolTip="{DynamicResource LocBackOverview}" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xF15C;" FontFamily="{StaticResource FluentIconFont}" FontSize="16" Margin="0,0,5,0" />
-                    <TextBlock Text="返回" />
+                    <TextBlock Text="{DynamicResource LocBack}" />
                 </StackPanel>
             </Button>
             <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="重置卡详情" FontSize="21" FontWeight="SemiBold" />
+                <TextBlock Text="{DynamicResource LocResetDetails}" FontSize="21" FontWeight="SemiBold" />
                 <TextBlock Text="{Binding ResetDetailsStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
             </StackPanel>
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <Ellipse Width="7" Height="7" Fill="{Binding SyncStatusBrush}" Margin="0,0,6,0" />
                 <TextBlock Text="{Binding SyncText}" Foreground="{DynamicResource MutedBrush}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" />
-                <Button Style="{StaticResource IconButton}" Command="{Binding RefreshCommand}" ToolTip="刷新数据">
+                <Button Style="{StaticResource IconButton}" Command="{Binding RefreshCommand}" ToolTip="{DynamicResource LocRefreshTooltip}">
                     <TextBlock Text="&#xF194;" FontFamily="{StaticResource FluentIconFont}" FontSize="18" />
                 </Button>
-                <Button Style="{StaticResource IconButton}" Command="{Binding ToggleThemeCommand}" ToolTip="{Binding ThemeToolTip}">
-                    <TextBlock Text="{Binding ThemeIcon}" FontFamily="{StaticResource UiFont}" FontSize="18" FontWeight="SemiBold" />
+                <Button Style="{StaticResource IconButton}" Click="SettingsButton_Click" ToolTip="{DynamicResource LocSettings}">
+                    <TextBlock Text="&#xF6AA;" FontFamily="{StaticResource FluentIconFont}" FontSize="18" />
                 </Button>
             </StackPanel>
         </Grid>
@@ -36,23 +36,23 @@
                         <StackPanel VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="{Binding ResetCreditCountValueText}" FontSize="48" FontWeight="SemiBold" Foreground="{DynamicResource AmberBrush}" />
-                                <TextBlock Text="次可用" FontSize="17" Foreground="{DynamicResource AmberBrush}" VerticalAlignment="Bottom" Margin="7,0,0,8" />
+                                <TextBlock Text="{DynamicResource LocTimesAvailable}" FontSize="17" Foreground="{DynamicResource AmberBrush}" VerticalAlignment="Bottom" Margin="7,0,0,8" />
                             </StackPanel>
                             <TextBlock Text="{Binding ResetSummary}" Foreground="{DynamicResource MutedBrush}" Margin="0,3,0,0" />
                         </StackPanel>
                         <Border Grid.Column="1" Background="{DynamicResource LineBrush}" Margin="0,4" />
                         <StackPanel Grid.Column="2" Margin="24,9,0,0">
-                            <TextBlock Text="有效期进度" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                            <TextBlock Text="{DynamicResource LocValidityProgress}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                             <TextBlock Text="{Binding ResetNearestExpiry}" Foreground="{DynamicResource AmberBrush}" FontSize="14" FontWeight="SemiBold" Margin="0,4,0,0" />
                             <ProgressBar Style="{StaticResource FlatProgressBar}" Height="8" Margin="0,16,0,7" Maximum="100" Value="{Binding ResetTimelinePercent, Mode=OneWay}" Foreground="{DynamicResource AmberBrush}" Background="{DynamicResource AmberTrackBrush}" />
-                            <Grid><TextBlock Text="授予" Foreground="{DynamicResource MutedBrush}" FontSize="11" /><TextBlock Text="当前" HorizontalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="11" /><TextBlock Text="到期" HorizontalAlignment="Right" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></Grid>
+                            <Grid><TextBlock Text="{DynamicResource LocGranted}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /><TextBlock Text="{DynamicResource LocCurrent}" HorizontalAlignment="Center" Foreground="{DynamicResource MutedBrush}" FontSize="11" /><TextBlock Text="{DynamicResource LocExpires}" HorizontalAlignment="Right" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></Grid>
                         </StackPanel>
                     </Grid>
                 </Border>
 
                 <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
                     <StackPanel>
-                        <TextBlock Text="可用重置卡" Style="{StaticResource SectionHeader}" />
+                        <TextBlock Text="{DynamicResource LocAvailableResetCards}" Style="{StaticResource SectionHeader}" />
                         <ItemsControl ItemsSource="{Binding ResetCredits}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -84,8 +84,8 @@
 
                 <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
                     <StackPanel>
-                        <TextBlock Text="历史记录" Style="{StaticResource SectionHeader}" />
-                        <TextBlock Text="从首次运行开始记录；服务端缺少单卡详情时，使用与过期会标记为推测。" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,-4,0,8" />
+                        <TextBlock Text="{DynamicResource LocResetHistory}" Style="{StaticResource SectionHeader}" />
+                        <TextBlock Text="{DynamicResource LocResetHistoryDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,-4,0,8" />
                         <ItemsControl ItemsSource="{Binding ResetHistory}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -112,7 +112,7 @@
                             <TextBlock Text="&#xED7D;" FontFamily="{StaticResource FluentIconFont}" Foreground="{DynamicResource IndigoBrush}" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <StackPanel Grid.Column="1" Margin="9,0,0,0">
-                            <TextBlock Text="到期前提醒" FontSize="14" FontWeight="SemiBold" />
+                            <TextBlock Text="{DynamicResource LocExpiryReminder}" FontSize="14" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding ResetNotificationStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                         </StackPanel>
                         <ToggleButton Grid.Column="2" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding NotificationsEnabled}" IsEnabled="{Binding HasResetExpiry}" VerticalAlignment="Center" ToolTip="{Binding ResetNotificationStatus}" />
@@ -124,16 +124,16 @@
         <Border Grid.Row="2" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource ChromeBrush}">
             <Grid Margin="18,8,16,8">
                 <Button Style="{StaticResource TextActionButton}" Command="{Binding OpenUsagePageCommand}">
-                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xF583;" FontFamily="{StaticResource FluentIconFont}" FontSize="16" Margin="0,0,7,0" /><TextBlock Text="打开 Codex 用量页面" /></StackPanel>
+                    <StackPanel Orientation="Horizontal"><TextBlock Text="&#xF583;" FontFamily="{StaticResource FluentIconFont}" FontSize="16" Margin="0,0,7,0" /><TextBlock Text="{DynamicResource LocOpenCodexUsage}" /></StackPanel>
                 </Button>
-                <Button Style="{StaticResource PillActionButton}" Command="{Binding OpenDataFolderCommand}" ToolTip="打开数据目录" HorizontalAlignment="Right">
+                <Button Style="{StaticResource PillActionButton}" Command="{Binding OpenDataFolderCommand}" ToolTip="{DynamicResource LocOpenDataFolder}" HorizontalAlignment="Right">
                     <StackPanel Orientation="Horizontal">
                         <Grid Width="12" Height="12" VerticalAlignment="Center" Margin="0,0,6,0">
                             <Path Data="M 1.5,3 L 5,3 L 6.2,4.4 L 10.5,4.4 L 10.5,9.5 L 1.5,9.5 Z"
                                   Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                   StrokeThickness="1.2" StrokeLineJoin="Round" />
                         </Grid>
-                        <TextBlock Text="数据" VerticalAlignment="Center" />
+                        <TextBlock Text="{DynamicResource LocData}" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
             </Grid>

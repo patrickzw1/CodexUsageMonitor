@@ -4,25 +4,25 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="22,4,22,22">
             <StackPanel Margin="2,0,2,12">
-                <TextBlock Text="历史趋势" FontSize="20" FontWeight="SemiBold" />
-                <TextBlock Text="本地 SQLite 历史与 Codex 官方日趋势" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,3,0,0" />
+                <TextBlock Text="{DynamicResource LocHistoryTrends}" FontSize="20" FontWeight="SemiBold" />
+                <TextBlock Text="{DynamicResource LocHistoryDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,3,0,0" />
             </StackPanel>
 
             <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="1" /><ColumnDefinition Width="*" /><ColumnDefinition Width="1" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                     <StackPanel>
-                        <TextBlock Text="本月 Tokens" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{DynamicResource LocMonthlyTokens}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                         <TextBlock Text="{Binding MonthTokens}" FontSize="24" FontWeight="SemiBold" Margin="0,4,0,0" />
                     </StackPanel>
                     <Border Grid.Column="1" Background="{DynamicResource LineBrush}" />
                     <StackPanel Grid.Column="2" Margin="12,0">
-                        <TextBlock Text="API 等价成本" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{DynamicResource LocApiEquivalentCost}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                         <TextBlock Text="{Binding MonthCost}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" Margin="0,4,0,0" />
                     </StackPanel>
                     <Border Grid.Column="3" Background="{DynamicResource LineBrush}" />
                     <StackPanel Grid.Column="4" Margin="18,0,0,0">
-                        <TextBlock Text="缓存命中" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{DynamicResource LocCacheHit}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                         <TextBlock Text="{Binding CacheHit}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource GreenBrush}" Margin="0,4,0,0" />
                     </StackPanel>
                 </Grid>
@@ -30,8 +30,8 @@
 
             <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
                 <StackPanel>
-                    <TextBlock Text="本月每日 Token" Style="{StaticResource SectionHeader}" />
-                    <TextBlock Text="日总量来自 account/usage/read；模型与缓存拆分来自本地 rollout。" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,-4,0,10" />
+                    <TextBlock Text="{DynamicResource LocDailyTokens}" Style="{StaticResource SectionHeader}" />
+                    <TextBlock Text="{DynamicResource LocDailyTokensDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,-4,0,10" />
                     <ItemsControl ItemsSource="{Binding DailyUsage}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -45,7 +45,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <Border Background="{DynamicResource InsetBrush}" CornerRadius="10" Padding="13" Margin="0,6,0,0">
-                        <TextBlock Text="历史会随每次刷新写入本地数据库，换机时复制数据目录即可保留趋势。" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
+                        <TextBlock Text="{DynamicResource LocHistoryPortable}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
                     </Border>
                 </StackPanel>
             </Border>
@@ -55,26 +55,13 @@
                     <Grid.ColumnDefinitions><ColumnDefinition Width="40" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                     <TextBlock Text="&#xF42F;" FontFamily="{StaticResource FluentIconFont}" FontSize="19" Foreground="{DynamicResource IndigoBrush}" VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="打开本地数据目录" FontWeight="SemiBold" />
-                        <TextBlock Text="数据库、价格快照与设置都保存在这里" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                        <TextBlock Text="{DynamicResource LocOpenLocalDataFolder}" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource LocDataFolderDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                     </StackPanel>
                     <TextBlock Grid.Column="2" Text="&#xF182;" FontFamily="{StaticResource FluentIconFont}" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" />
                 </Grid>
             </Button>
 
-            <Border Style="{StaticResource GlassCard}">
-                <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="42" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                    <Border Width="34" Height="34" Background="{DynamicResource IndigoSubtleBrush}" CornerRadius="10">
-                        <TextBlock Text="&#xF78C;" FontFamily="{StaticResource FluentIconFont}" Foreground="{DynamicResource IndigoBrush}" FontSize="17" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
-                    <StackPanel Grid.Column="1" Margin="9,0,16,0" VerticalAlignment="Center">
-                        <TextBlock Text="开机自动启动（后台运行）" FontSize="14" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding StartupStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
-                    </StackPanel>
-                    <ToggleButton Grid.Column="2" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding StartupEnabled}" VerticalAlignment="Center" ToolTip="登录 Windows 后在托盘后台启动" />
-                </Grid>
-            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

@@ -5,7 +5,8 @@ namespace CodexUsageMonitor.Core.Services;
 
 public sealed record QuotaParseResult(
     QuotaSnapshot? Snapshot,
-    bool GeneralComplete,
+    bool GeneralFiveHourComplete,
+    bool GeneralWeeklyComplete,
     bool SparkComplete,
     bool ResetCreditCountComplete,
     bool ResetCreditDetailsComplete);
@@ -130,7 +131,8 @@ public static class AppServerResponseParser
             : new QuotaSnapshot(general, spark, availableCount, detailsComplete, credits);
         return new QuotaParseResult(
             snapshot,
-            IsCompleteWindow(general?.Weekly),
+            general?.FiveHour is not null && IsCompleteWindow(general.FiveHour),
+            general?.Weekly is not null && IsCompleteWindow(general.Weekly),
             spark is not null
             && (spark.FiveHour is not null || spark.Weekly is not null)
             && (spark.FiveHour is null || IsCompleteWindow(spark.FiveHour))

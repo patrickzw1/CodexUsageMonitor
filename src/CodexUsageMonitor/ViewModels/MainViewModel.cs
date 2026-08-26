@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Windows.Media;
 using System.Windows.Input;
 using CodexUsageMonitor.Core.Models;
@@ -15,30 +16,46 @@ using MediaBrushes = System.Windows.Media.Brushes;
 public sealed class MainViewModel : ObservableObject
 {
     private static readonly TimeSpan RefreshCooldown = TimeSpan.FromMinutes(2);
+    private static readonly CultureInfo EnglishCulture = CultureInfo.GetCultureInfo("en-US");
+    private static readonly CultureInfo ChineseCulture = CultureInfo.GetCultureInfo("zh-CN");
     private readonly IDashboardService _dashboardService;
     private readonly IStartupRegistrationService _startupService;
+    private readonly IUpdateCheckService? _updateCheckService;
+    private readonly Action<Uri> _openUri;
+    private readonly AsyncRelayCommand _refreshCommand;
+    private readonly AsyncRelayCommand _checkForUpdatesCommand;
     private readonly HashSet<string> _sentExpiryNotifications = new(StringComparer.Ordinal);
     private readonly object _lifecycleSync = new();
     private readonly object _refreshSync = new();
+    private readonly object _updateSync = new();
     private readonly object _startupSettingsSync = new();
     private CancellationTokenSource? _initializationCancellation;
     private Task? _initializationTask;
     private CancellationTokenSource? _refreshCancellation;
+    private readonly CancellationTokenSource _updateCancellation = new();
     private Task? _activeRefresh;
+    private Task? _activeUpdateCheck;
     private bool _activeRefreshForcesAppServer;
     private bool _refreshLoopAcceptingRequests;
     private bool _forceRefreshPending;
     private Task _notificationSettingsWriteTask = Task.CompletedTask;
     private Task _themeSettingsWriteTask = Task.CompletedTask;
+    private Task _languageSettingsWriteTask = Task.CompletedTask;
+    private Task _updateSettingsWriteTask = Task.CompletedTask;
     private Task _startupSettingsWriteTask = Task.CompletedTask;
     private long _notificationSettingsVersion;
     private long _themeSettingsVersion;
+    private long _languageSettingsVersion;
+    private long _updateSettingsVersion;
     private long _startupSettingsVersion;
     private bool _notificationSettingsReadPending;
     private bool _themeSettingsReadPending;
+    private bool _languageSettingsReadPending;
+    private bool _updateSettingsReadPending;
     private bool _startupReconcilePending;
     private bool _shutdownStarted;
     private bool _isLoading;
+    private bool _isUpdateChecking;
     private string _currentPage = "overview";
     private string _selectedModelRange = "7d";
     private UsageAggregation? _todayUsage;
@@ -51,6 +68,10 @@ public sealed class MainViewModel : ObservableObject
     private double _weeklyRemaining;
     private string _weeklyRemainingText = "不可用";
     private string _weeklyResetText = "服务端未返回";
+    private bool _generalFiveHourVisible;
+    private string _generalFiveRemaining = "—";
+    private double _generalFiveRemainingPercent;
+    private string _generalFiveReset = "—";
     private double _paceUsedPercent;
     private double _paceElapsedPercent;
     private bool _paceWillExhaust;
@@ -85,6 +106,14 @@ public sealed class MainViewModel : ObservableObject
     private string _reasoningLegend = "0";
     private bool _notificationsEnabled = true;
     private bool _isDarkMode;
+    private bool _isEnglish;
+    private bool _autoUpdateCheckEnabled = true;
+    private bool _isUpdateAvailable;
+    private bool _isUpdateFlyoutOpen;
+    private string? _latestVersion;
+    private Uri? _latestReleaseUrl;
+    private string _updateCheckStatus = "每 24 小时最多自动检查一次";
+    private UpdateUiStatus _updateUiStatus = UpdateUiStatus.Ready;
     private bool _startupEnabled;
     private bool _confirmedStartupEnabled;
     private string _startupStatus = "默认关闭，登录 Windows 时不会自动运行";
@@ -100,14 +129,23 @@ public sealed class MainViewModel : ObservableObject
     private string _resetNotificationStatus = "等待获取有效期";
     private string _modelPricingStatus = "等待价格同步";
     private DateTimeOffset? _lastRefreshCompletedAt;
+    private DashboardSnapshot? _lastSnapshot;
 
     public MainViewModel(
         IDashboardService dashboardService,
-        IStartupRegistrationService startupService)
+        IStartupRegistrationService startupService,
+        IUpdateCheckService? updateCheckService = null,
+        Action<Uri>? openUri = null)
     {
         _dashboardService = dashboardService;
         _startupService = startupService;
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsLoading);
+        _updateCheckService = updateCheckService;
+        _openUri = openUri ?? (uri => StartShell(uri.AbsoluteUri));
+        _refreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsLoading);
+        _checkForUpdatesCommand = new AsyncRelayCommand(
+            CheckForUpdatesAsync,
+            () => _updateCheckService is not null && !IsUpdateChecking);
+        RefreshCommand = _refreshCommand;
         ShowOverviewCommand = new RelayCommand(() => CurrentPage = "overview");
         ShowModelsCommand = new RelayCommand(() => CurrentPage = "models");
         ShowResetDetailsCommand = new RelayCommand(() => CurrentPage = "reset");
@@ -117,12 +155,21 @@ public sealed class MainViewModel : ObservableObject
         SelectThirtyDayCommand = new RelayCommand(() => SelectModelRange("30d"));
         OpenUsagePageCommand = new RelayCommand(OpenUsagePage);
         OpenDataFolderCommand = new RelayCommand(OpenDataFolder);
-        ToggleThemeCommand = new RelayCommand(() => SetDarkMode(!IsDarkMode, persist: true));
+        SetLightThemeCommand = new RelayCommand(() => SetDarkMode(false, persist: true));
+        SetDarkThemeCommand = new RelayCommand(() => SetDarkMode(true, persist: true));
+        SetChineseLanguageCommand = new RelayCommand(() => SetEnglish(false, persist: true));
+        SetEnglishLanguageCommand = new RelayCommand(() => SetEnglish(true, persist: true));
+        ToggleUpdateFlyoutCommand = new RelayCommand(ToggleUpdateFlyout);
+        CloseUpdateFlyoutCommand = new RelayCommand(() => IsUpdateFlyoutOpen = false);
+        SnoozeUpdateCommand = new AsyncRelayCommand(SnoozeUpdateAsync);
+        ViewUpdateCommand = new RelayCommand(ViewUpdate);
+        CheckForUpdatesCommand = _checkForUpdatesCommand;
         QuitCommand = new RelayCommand(() => QuitRequested?.Invoke(this, EventArgs.Empty));
     }
 
     public event EventHandler? QuitRequested;
     public event EventHandler<ThemeChangedEventArgs>? ThemeChanged;
+    public event EventHandler<LanguageChangedEventArgs>? LanguageChanged;
     public event EventHandler<ResetExpiryNotificationEventArgs>? ResetExpiryNotificationRequested;
 
     public ICommand RefreshCommand { get; }
@@ -135,7 +182,15 @@ public sealed class MainViewModel : ObservableObject
     public ICommand SelectThirtyDayCommand { get; }
     public ICommand OpenUsagePageCommand { get; }
     public ICommand OpenDataFolderCommand { get; }
-    public ICommand ToggleThemeCommand { get; }
+    public ICommand SetLightThemeCommand { get; }
+    public ICommand SetDarkThemeCommand { get; }
+    public ICommand SetChineseLanguageCommand { get; }
+    public ICommand SetEnglishLanguageCommand { get; }
+    public ICommand CheckForUpdatesCommand { get; }
+    public ICommand ToggleUpdateFlyoutCommand { get; }
+    public ICommand CloseUpdateFlyoutCommand { get; }
+    public ICommand SnoozeUpdateCommand { get; }
+    public ICommand ViewUpdateCommand { get; }
     public ICommand QuitCommand { get; }
 
     public ObservableCollection<ModelUsageRowViewModel> Models { get; } = [];
@@ -143,7 +198,29 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<ResetHistoryRowViewModel> ResetHistory { get; } = [];
     public ObservableCollection<DailyUsageRowViewModel> DailyUsage { get; } = [];
 
-    public bool IsLoading { get => _isLoading; private set => SetProperty(ref _isLoading, value); }
+    public bool IsLoading
+    {
+        get => _isLoading;
+        private set
+        {
+            if (SetProperty(ref _isLoading, value))
+            {
+                _refreshCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool IsUpdateChecking
+    {
+        get => _isUpdateChecking;
+        private set
+        {
+            if (SetProperty(ref _isUpdateChecking, value))
+            {
+                _checkForUpdatesCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
 
     public string CurrentPage
     {
@@ -177,6 +254,10 @@ public sealed class MainViewModel : ObservableObject
     public double WeeklyRemaining { get => _weeklyRemaining; private set => SetProperty(ref _weeklyRemaining, value); }
     public string WeeklyRemainingText { get => _weeklyRemainingText; private set => SetProperty(ref _weeklyRemainingText, value); }
     public string WeeklyResetText { get => _weeklyResetText; private set => SetProperty(ref _weeklyResetText, value); }
+    public bool GeneralFiveHourVisible { get => _generalFiveHourVisible; private set => SetProperty(ref _generalFiveHourVisible, value); }
+    public string GeneralFiveRemaining { get => _generalFiveRemaining; private set => SetProperty(ref _generalFiveRemaining, value); }
+    public double GeneralFiveRemainingPercent { get => _generalFiveRemainingPercent; private set => SetProperty(ref _generalFiveRemainingPercent, value); }
+    public string GeneralFiveReset { get => _generalFiveReset; private set => SetProperty(ref _generalFiveReset, value); }
     public double PaceUsedPercent { get => _paceUsedPercent; private set => SetProperty(ref _paceUsedPercent, value); }
     public double PaceElapsedPercent { get => _paceElapsedPercent; private set => SetProperty(ref _paceElapsedPercent, value); }
     public bool PaceWillExhaust { get => _paceWillExhaust; private set => SetProperty(ref _paceWillExhaust, value); }
@@ -193,7 +274,9 @@ public sealed class MainViewModel : ObservableObject
     public double SparkWeeklyRemainingPercent { get => _sparkWeeklyRemainingPercent; private set => SetProperty(ref _sparkWeeklyRemainingPercent, value); }
     public string SparkWeeklyReset { get => _sparkWeeklyReset; private set => SetProperty(ref _sparkWeeklyReset, value); }
     public int? ResetCreditCount { get => _resetCreditCount; private set { SetProperty(ref _resetCreditCount, value); OnPropertyChanged(nameof(ResetCreditCountText)); OnPropertyChanged(nameof(ResetCreditCountValueText)); } }
-    public string ResetCreditCountText => ResetCreditCount.HasValue ? $"{ResetCreditCount} 次可用" : "次数不可用";
+    public string ResetCreditCountText => ResetCreditCount.HasValue
+        ? IsEnglish ? $"{ResetCreditCount} available" : $"{ResetCreditCount} 次可用"
+        : IsEnglish ? "Count unavailable" : "次数不可用";
     public string ResetCreditCountValueText => ResetCreditCount?.ToString(CultureInfo.InvariantCulture) ?? "—";
     public string ResetSummary { get => _resetSummary; private set => SetProperty(ref _resetSummary, value); }
     public string ResetNearestExpiry { get => _resetNearestExpiry; private set => SetProperty(ref _resetNearestExpiry, value); }
@@ -223,9 +306,53 @@ public sealed class MainViewModel : ObservableObject
     public string ResetNotificationStatus { get => _resetNotificationStatus; private set => SetProperty(ref _resetNotificationStatus, value); }
     public string ModelPricingStatus { get => _modelPricingStatus; private set => SetProperty(ref _modelPricingStatus, value); }
     public bool IsDarkMode => _isDarkMode;
-    public string ThemeIcon => IsDarkMode ? "☀" : "☾";
-    public string ThemeToolTip => IsDarkMode ? "切换为浅色模式" : "切换为暗黑模式";
+    public bool IsLightMode => !_isDarkMode;
+    public bool IsEnglish => _isEnglish;
+    public bool IsChinese => !_isEnglish;
     public string StartupStatus { get => _startupStatus; private set => SetProperty(ref _startupStatus, value); }
+    public bool IsUpdateAvailable
+    {
+        get => _isUpdateAvailable;
+        private set
+        {
+            if (SetProperty(ref _isUpdateAvailable, value) && !value)
+            {
+                IsUpdateFlyoutOpen = false;
+            }
+        }
+    }
+    public bool IsUpdateFlyoutOpen { get => _isUpdateFlyoutOpen; set => SetProperty(ref _isUpdateFlyoutOpen, value); }
+    public string LatestVersionText => string.IsNullOrWhiteSpace(_latestVersion) ? string.Empty : $"v{_latestVersion}";
+    public string UpdateCheckStatus { get => _updateCheckStatus; private set => SetProperty(ref _updateCheckStatus, value); }
+
+    public bool AutoUpdateCheckEnabled
+    {
+        get => _autoUpdateCheckEnabled;
+        set
+        {
+            lock (_lifecycleSync)
+            {
+                if (_shutdownStarted || _updateCheckService is null)
+                {
+                    return;
+                }
+
+                var changed = SetProperty(ref _autoUpdateCheckEnabled, value);
+                if (!changed && !_updateSettingsReadPending)
+                {
+                    return;
+                }
+
+                _updateSettingsVersion++;
+                _updateUiStatus = value ? UpdateUiStatus.Ready : UpdateUiStatus.Disabled;
+                UpdateLocalizedUpdateStatus();
+                _updateSettingsWriteTask = PersistUpdateSettingAsync(
+                    _updateSettingsWriteTask,
+                    value,
+                    _updateSettingsVersion);
+            }
+        }
+    }
 
     public bool StartupEnabled
     {
@@ -247,7 +374,7 @@ public sealed class MainViewModel : ObservableObject
                         return;
                     }
 
-                    StartupStatus = "正在更新开机启动设置…";
+                    StartupStatus = IsEnglish ? "Updating startup setting…" : "正在更新开机启动设置…";
                     var version = ++_startupSettingsVersion;
                     _startupSettingsWriteTask = PersistStartupAsync(
                         _startupSettingsWriteTask,
@@ -316,6 +443,8 @@ public sealed class MainViewModel : ObservableObject
             await startupReconcileTask.WaitAsync(cancellationToken);
             await InitializeNotificationSettingAsync(cancellationToken);
             await InitializeThemeSettingAsync(cancellationToken);
+            await InitializeLanguageSettingAsync(cancellationToken);
+            await InitializeUpdateCheckSettingAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -330,13 +459,20 @@ public sealed class MainViewModel : ObservableObject
                     return;
                 }
 
-                Warning = $"本地历史初始化失败：{exception.Message}";
+                Warning = IsEnglish
+                    ? $"Failed to initialize local history: {exception.Message}"
+                    : $"本地历史初始化失败：{exception.Message}";
             }
         }
 
         if (cancellationToken.IsCancellationRequested)
         {
             return;
+        }
+
+        if (_updateCheckService is not null && AutoUpdateCheckEnabled)
+        {
+            _ = StartUpdateCheckAsync(force: false, showStatus: false);
         }
 
         await StartRefreshAsync(forceAppServer: true, enforceCooldown: false);
@@ -354,11 +490,15 @@ public sealed class MainViewModel : ObservableObject
         Task startupSettingsWriteTask;
         Task notificationSettingsWriteTask;
         Task themeSettingsWriteTask;
+        Task languageSettingsWriteTask;
+        Task updateSettingsWriteTask;
         Task? initializationTask;
+        Task? updateCheck;
         lock (_lifecycleSync)
         {
             _shutdownStarted = true;
             _initializationCancellation?.Cancel();
+            _updateCancellation.Cancel();
             initializationTask = _initializationTask;
             lock (_refreshSync)
             {
@@ -368,6 +508,11 @@ public sealed class MainViewModel : ObservableObject
                 refresh = _activeRefresh;
             }
 
+            lock (_updateSync)
+            {
+                updateCheck = _activeUpdateCheck;
+            }
+
             lock (_startupSettingsSync)
             {
                 startupSettingsWriteTask = _startupSettingsWriteTask;
@@ -375,12 +520,16 @@ public sealed class MainViewModel : ObservableObject
 
             notificationSettingsWriteTask = _notificationSettingsWriteTask;
             themeSettingsWriteTask = _themeSettingsWriteTask;
+            languageSettingsWriteTask = _languageSettingsWriteTask;
+            updateSettingsWriteTask = _updateSettingsWriteTask;
         }
 
         var tasks = new List<Task>
         {
             notificationSettingsWriteTask,
             themeSettingsWriteTask,
+            languageSettingsWriteTask,
+            updateSettingsWriteTask,
             startupSettingsWriteTask
         };
         if (refresh is not null)
@@ -390,6 +539,10 @@ public sealed class MainViewModel : ObservableObject
         if (initializationTask is not null)
         {
             tasks.Add(initializationTask);
+        }
+        if (updateCheck is not null)
+        {
+            tasks.Add(updateCheck);
         }
 
         await AsyncShutdown.WaitAsync(tasks, timeout);
@@ -401,6 +554,167 @@ public sealed class MainViewModel : ObservableObject
         {
             _refreshCancellation?.Cancel();
         }
+
+        _updateCancellation.Cancel();
+    }
+
+    private Task CheckForUpdatesAsync()
+        => StartUpdateCheckAsync(force: true, showStatus: true);
+
+    private Task StartUpdateCheckAsync(bool force, bool showStatus)
+    {
+        lock (_lifecycleSync)
+        {
+            if (_shutdownStarted || _updateCheckService is null)
+            {
+                return Task.CompletedTask;
+            }
+
+            lock (_updateSync)
+            {
+                if (_activeUpdateCheck is { IsCompleted: false })
+                {
+                    return _activeUpdateCheck;
+                }
+
+                _activeUpdateCheck = RunUpdateCheckAsync(force, showStatus);
+                return _activeUpdateCheck;
+            }
+        }
+    }
+
+    private async Task RunUpdateCheckAsync(bool force, bool showStatus)
+    {
+        IsUpdateChecking = true;
+        IsUpdateAvailable = false;
+        if (showStatus)
+        {
+            _updateUiStatus = UpdateUiStatus.Checking;
+            UpdateLocalizedUpdateStatus();
+        }
+
+        try
+        {
+            var result = await _updateCheckService!.CheckAsync(force, _updateCancellation.Token);
+            lock (_lifecycleSync)
+            {
+                if (_shutdownStarted || _updateCancellation.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                if (result.IsUpdateAvailable && result.ReleaseUrl is not null)
+                {
+                    _latestVersion = result.LatestVersion;
+                    _latestReleaseUrl = result.ReleaseUrl;
+                    OnPropertyChanged(nameof(LatestVersionText));
+                    IsUpdateAvailable = true;
+                    _updateUiStatus = UpdateUiStatus.Available;
+                    UpdateLocalizedUpdateStatus();
+                }
+                else if (result.Outcome is UpdateCheckOutcome.NoUpdate or UpdateCheckOutcome.Skipped)
+                {
+                    IsUpdateAvailable = false;
+                    if (showStatus || result.NetworkRequested)
+                    {
+                        _updateUiStatus = UpdateUiStatus.Latest;
+                        UpdateLocalizedUpdateStatus();
+                    }
+                }
+                else if (showStatus)
+                {
+                    IsUpdateAvailable = false;
+                    _updateUiStatus = UpdateUiStatus.Failed;
+                    UpdateLocalizedUpdateStatus();
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_updateCancellation.IsCancellationRequested)
+        {
+            // Application shutdown owns this cancellation.
+        }
+        catch
+        {
+            IsUpdateAvailable = false;
+            if (showStatus)
+            {
+                _updateUiStatus = UpdateUiStatus.Failed;
+                UpdateLocalizedUpdateStatus();
+            }
+        }
+        finally
+        {
+            IsUpdateChecking = false;
+            lock (_updateSync)
+            {
+                _activeUpdateCheck = null;
+            }
+        }
+    }
+
+    private void ToggleUpdateFlyout()
+    {
+        if (IsUpdateAvailable)
+        {
+            IsUpdateFlyoutOpen = !IsUpdateFlyoutOpen;
+        }
+    }
+
+    private async Task SnoozeUpdateAsync()
+    {
+        if (_updateCheckService is null || string.IsNullOrWhiteSpace(_latestVersion))
+        {
+            return;
+        }
+
+        try
+        {
+            await _updateCheckService.SnoozeAsync(_latestVersion, _updateCancellation.Token);
+            if (_shutdownStarted)
+            {
+                return;
+            }
+
+            IsUpdateAvailable = false;
+            _updateUiStatus = UpdateUiStatus.Snoozed;
+            UpdateLocalizedUpdateStatus();
+        }
+        catch (OperationCanceledException) when (_updateCancellation.IsCancellationRequested)
+        {
+            // Application shutdown owns this cancellation.
+        }
+        catch
+        {
+            _updateUiStatus = UpdateUiStatus.Failed;
+            UpdateLocalizedUpdateStatus();
+        }
+    }
+
+    private void ViewUpdate()
+    {
+        if (!IsUpdateAvailable || _latestReleaseUrl is null)
+        {
+            return;
+        }
+
+        _openUri(_latestReleaseUrl);
+        IsUpdateFlyoutOpen = false;
+    }
+
+    private void UpdateLocalizedUpdateStatus()
+    {
+        UpdateCheckStatus = _updateUiStatus switch
+        {
+            UpdateUiStatus.Disabled => IsEnglish ? "Automatic update checks are off" : "自动检查更新已关闭",
+            UpdateUiStatus.Checking => IsEnglish ? "Checking GitHub for updates…" : "正在检查 GitHub 更新…",
+            UpdateUiStatus.Latest => IsEnglish ? "You are using the latest version" : "当前已是最新版本",
+            UpdateUiStatus.Available => IsEnglish
+                ? $"Version v{_latestVersion} is available"
+                : $"发现新版本 v{_latestVersion}",
+            UpdateUiStatus.Failed => IsEnglish ? "Check failed; try again later" : "检查失败，请稍后重试",
+            UpdateUiStatus.Snoozed => IsEnglish ? "This version is snoozed for 24 hours" : "已延后 24 小时提醒",
+            _ => IsEnglish ? "Checks automatically at most once every 24 hours" : "每 24 小时最多自动检查一次"
+        };
     }
 
     private Task StartRefreshAsync(bool forceAppServer, bool enforceCooldown)
@@ -468,12 +782,12 @@ public sealed class MainViewModel : ObservableObject
         if (enforceCooldown && _lastRefreshCompletedAt is { } lastRefresh
             && DateTimeOffset.Now - lastRefresh < RefreshCooldown)
         {
-            SyncText = $"已是最新 · {lastRefresh:HH:mm}";
+            SyncText = IsEnglish ? $"Up to date · {lastRefresh:HH:mm}" : $"已是最新 · {lastRefresh:HH:mm}";
             return;
         }
 
         IsLoading = true;
-        SyncText = "正在同步…";
+        SyncText = IsEnglish ? "Syncing…" : "正在同步…";
         SyncStatusBrush = MediaBrushes.DarkGoldenrod;
         try
         {
@@ -492,13 +806,13 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            SyncText = "刷新已取消";
+            SyncText = IsEnglish ? "Refresh canceled" : "刷新已取消";
             SyncStatusBrush = MediaBrushes.DarkGoldenrod;
         }
         catch (Exception exception)
         {
             Warning = exception.Message;
-            SyncText = "同步失败";
+            SyncText = IsEnglish ? "Sync failed" : "同步失败";
             SyncStatusBrush = MediaBrushes.Firebrick;
         }
         finally
@@ -509,40 +823,63 @@ public sealed class MainViewModel : ObservableObject
 
     private void Apply(DashboardSnapshot snapshot)
     {
+        _lastSnapshot = snapshot;
         PlanDisplay = PlanCapabilities.DisplayName(snapshot.Account?.PlanType);
-        SyncText = $"更新于 {snapshot.RefreshedAt:HH:mm}";
-        Warning = snapshot.Warning ?? string.Empty;
+        SyncText = IsEnglish ? $"Updated {snapshot.RefreshedAt:HH:mm}" : $"更新于 {snapshot.RefreshedAt:HH:mm}";
+        Warning = FormatWarning(snapshot.Warning);
         SyncStatusBrush = string.IsNullOrWhiteSpace(snapshot.Warning) ? MediaBrushes.SeaGreen : MediaBrushes.DarkGoldenrod;
 
         var weekly = snapshot.Quota?.General?.Weekly;
         WeeklyRemaining = weekly?.RemainingPercent ?? 0;
-        WeeklyRemainingText = weekly?.RemainingPercent is { } weeklyRemaining ? $"{weeklyRemaining}%" : "不可用";
+        WeeklyRemainingText = weekly?.RemainingPercent is { } weeklyRemaining
+            ? $"{weeklyRemaining}%"
+            : IsEnglish ? "Unavailable" : "不可用";
         WeeklyResetText = weekly?.ResetsAt is { } weeklyReset
-            ? $"{weeklyReset.ToLocalTime():M月d日 HH:mm} 重置{StaleSuffix(snapshot.Freshness.IsGeneralQuotaStale, snapshot.Freshness.GeneralQuotaUpdatedAt)}"
-            : "每周重置时间未返回";
+            ? $"{FormatDateTime(weeklyReset)}{(IsEnglish ? " reset" : " 重置")}{StaleSuffix(snapshot.Freshness.IsGeneralQuotaStale, snapshot.Freshness.GeneralQuotaUpdatedAt)}"
+            : IsEnglish ? "Weekly reset time unavailable" : "每周重置时间未返回";
+        var generalFiveHour = snapshot.Quota?.General?.FiveHour;
+        GeneralFiveHourVisible = IsUsableWindow(generalFiveHour, 300);
+        GeneralFiveRemaining = generalFiveHour?.RemainingPercent is { } generalFive
+            ? IsEnglish ? $"{generalFive}% left" : $"剩余 {generalFive}%"
+            : IsEnglish ? "Unavailable" : "不可用";
+        GeneralFiveRemainingPercent = generalFiveHour?.RemainingPercent ?? 0;
+        GeneralFiveReset = FormatCompactReset(generalFiveHour)
+                           + StaleSuffix(
+                               snapshot.Freshness.IsGeneralFiveHourQuotaStale,
+                               snapshot.Freshness.GeneralFiveHourQuotaUpdatedAt);
         PaceUsedPercent = Math.Clamp(weekly?.UsedPercent ?? 0, 0, 100);
         PaceElapsedPercent = Math.Clamp(snapshot.WeeklyPace.ElapsedPercent ?? 0, 0, 100);
         PaceWillExhaust = snapshot.WeeklyPace.WillExhaust ?? false;
         PaceText = snapshot.WeeklyPace.ProjectedUsedPercent is null or <= 0
-            ? "暂无足够数据预测"
-            : $"预计本周消耗 {snapshot.WeeklyPace.ProjectedUsedPercent:0}% 额度 · {(snapshot.WeeklyPace.WillExhaust == true ? "可能提前耗尽" : "不会耗尽")}";
+            ? IsEnglish ? "Not enough data to forecast" : "暂无足够数据预测"
+            : IsEnglish
+                ? $"Projected to use {snapshot.WeeklyPace.ProjectedUsedPercent:0}% this week · {(snapshot.WeeklyPace.WillExhaust == true ? "may run out early" : "will not run out") }"
+                : $"预计本周消耗 {snapshot.WeeklyPace.ProjectedUsedPercent:0}% 额度 · {(snapshot.WeeklyPace.WillExhaust == true ? "可能提前耗尽" : "不会耗尽")}";
         PaceDetailText = weekly?.UsedPercent is { } used && snapshot.WeeklyPace.ElapsedPercent is { } elapsed
-            ? $"已用 {used}% ≈ {used * 7d / 100:0.0} 天均衡额度 · 每天基准 14.3%"
-            : "基准：7 天均分，每天约 14.3%";
+            ? IsEnglish
+                ? $"Used {used}% ≈ {used * 7d / 100:0.0} balanced days · 14.3% daily baseline"
+                : $"已用 {used}% ≈ {used * 7d / 100:0.0} 天均衡额度 · 每天基准 14.3%"
+            : IsEnglish ? "Baseline: split evenly across 7 days, about 14.3% daily" : "基准：7 天均分，每天约 14.3%";
         PaceWindowText = weekly?.ResetsAt is { } reset
                          && weekly.WindowDurationMinutes is > 0
                          && snapshot.WeeklyPace.ElapsedPercent is { } windowElapsed
-            ? $"灰色已用 · 虚线进度 {windowElapsed:0.0}% · {reset.AddMinutes(-weekly.WindowDurationMinutes.Value).ToLocalTime():M/d HH:mm} 起算"
-            : "每格代表额度窗口中的 24 小时";
+            ? IsEnglish
+                ? $"Gray: used · dashed marker: {windowElapsed:0.0}% · starts {reset.AddMinutes(-weekly.WindowDurationMinutes.Value).ToLocalTime():M/d HH:mm}"
+                : $"灰色已用 · 虚线进度 {windowElapsed:0.0}% · {reset.AddMinutes(-weekly.WindowDurationMinutes.Value).ToLocalTime():M/d HH:mm} 起算"
+            : IsEnglish ? "Each segment represents 24 hours of the quota window" : "每格代表额度窗口中的 24 小时";
 
         var spark = snapshot.Quota?.Spark;
-        SparkVisible = spark is not null;
-        SparkFiveHourVisible = spark?.FiveHour is not null;
-        SparkWeeklyVisible = spark?.Weekly is not null;
-        SparkFiveRemaining = spark?.FiveHour?.RemainingPercent is { } five ? $"剩余 {five}%" : "不可用";
+        SparkFiveHourVisible = IsUsableWindow(spark?.FiveHour, 300);
+        SparkWeeklyVisible = IsUsableWindow(spark?.Weekly, 10_080);
+        SparkVisible = SparkFiveHourVisible || SparkWeeklyVisible;
+        SparkFiveRemaining = spark?.FiveHour?.RemainingPercent is { } five
+            ? IsEnglish ? $"{five}% left" : $"剩余 {five}%"
+            : IsEnglish ? "Unavailable" : "不可用";
         SparkFiveRemainingPercent = spark?.FiveHour?.RemainingPercent ?? 0;
         SparkFiveReset = FormatReset(spark?.FiveHour) + StaleSuffix(snapshot.Freshness.IsSparkQuotaStale, snapshot.Freshness.SparkQuotaUpdatedAt);
-        SparkWeeklyRemaining = spark?.Weekly?.RemainingPercent is { } sparkWeek ? $"剩余 {sparkWeek}%" : "不可用";
+        SparkWeeklyRemaining = spark?.Weekly?.RemainingPercent is { } sparkWeek
+            ? IsEnglish ? $"{sparkWeek}% left" : $"剩余 {sparkWeek}%"
+            : IsEnglish ? "Unavailable" : "不可用";
         SparkWeeklyRemainingPercent = spark?.Weekly?.RemainingPercent ?? 0;
         SparkWeeklyReset = FormatReset(spark?.Weekly) + StaleSuffix(snapshot.Freshness.IsSparkQuotaStale, snapshot.Freshness.SparkQuotaUpdatedAt);
 
@@ -564,11 +901,15 @@ public sealed class MainViewModel : ObservableObject
             .OrderBy(item => item.ExpiresAt)
             .FirstOrDefault();
         ResetSummary = nearest?.ExpiresAt is { } expiry
-            ? $"最近 {DaysRemaining(expiry)} 天后到期"
-            : quota?.ResetCreditDetailsComplete == false ? "仅返回可用次数" : "暂无到期信息";
+            ? IsEnglish ? $"Nearest expiry in {DaysRemaining(expiry)} days" : $"最近 {DaysRemaining(expiry)} 天后到期"
+            : quota?.ResetCreditDetailsComplete == false
+                ? IsEnglish ? "Only the available count was returned" : "仅返回可用次数"
+                : IsEnglish ? "No expiry information" : "暂无到期信息";
         ResetNearestExpiry = nearest?.ExpiresAt is { } nearestExpiry
-            ? $"最近到期：{nearestExpiry.ToLocalTime():M月d日}（{DaysRemaining(nearestExpiry)} 天后）"
-            : "暂无到期信息";
+            ? IsEnglish
+                ? $"Nearest expiry: {nearestExpiry.ToLocalTime().ToString("MMM d", EnglishCulture)} (in {DaysRemaining(nearestExpiry)} days)"
+                : $"最近到期：{nearestExpiry.ToLocalTime():M月d日}（{DaysRemaining(nearestExpiry)} 天后）"
+            : IsEnglish ? "No expiry information" : "暂无到期信息";
         ResetTimelinePercent = nearest?.ExpiresAt is { } timelineExpiry
             ? Math.Clamp((DateTimeOffset.Now - nearest.GrantedAt.ToLocalTime()).TotalSeconds
                          / Math.Max((timelineExpiry.ToLocalTime() - nearest.GrantedAt.ToLocalTime()).TotalSeconds, 1)
@@ -576,11 +917,13 @@ public sealed class MainViewModel : ObservableObject
             : 0;
         HasResetExpiry = nearest?.ExpiresAt.HasValue == true;
         ResetNotificationStatus = HasResetExpiry
-            ? "7 天、3 天、1 天和到期当天发送 Windows 通知"
-            : "服务端未返回有效期，提醒暂不可用";
+            ? IsEnglish ? "Windows notifications at 7, 3, and 1 day, and on expiry day" : "7 天、3 天、1 天和到期当天发送 Windows 通知"
+            : IsEnglish ? "Expiry was not returned; reminders are unavailable" : "服务端未返回有效期，提醒暂不可用";
         ResetDetailsStatus = quota is null
-            ? "服务端未返回"
-            : quota.ResetCreditDetailsComplete ? "详情已完整同步" : "服务端仅返回总次数";
+            ? IsEnglish ? "Not returned by the service" : "服务端未返回"
+            : quota.ResetCreditDetailsComplete
+                ? IsEnglish ? "Details fully synchronized" : "详情已完整同步"
+                : IsEnglish ? "Only the total count was returned" : "服务端仅返回总次数";
         ResetDetailsStatus += StaleSuffix(
             snapshot.Freshness.IsResetCreditsStale,
             snapshot.Freshness.ResetCreditsUpdatedAt);
@@ -597,7 +940,9 @@ public sealed class MainViewModel : ObservableObject
                     ResetExpiryNotificationRequested?.Invoke(
                         this,
                         new ResetExpiryNotificationEventArgs(
-                            $"有 {newIds.Length} 张重置卡将在 {alert.DaysRemaining} 天后到期（{alert.ExpiresAt.ToLocalTime():M月d日}）。"));
+                            IsEnglish
+                                ? $"{newIds.Length} reset credits expire in {alert.DaysRemaining} days ({alert.ExpiresAt.ToLocalTime().ToString("MMM d", EnglishCulture)})."
+                                : $"有 {newIds.Length} 张重置卡将在 {alert.DaysRemaining} 天后到期（{alert.ExpiresAt.ToLocalTime():M月d日}）。"));
                 }
             }
         }
@@ -608,58 +953,66 @@ public sealed class MainViewModel : ObservableObject
             foreach (var credit in quota.ResetCredits.OrderBy(item => item.ExpiresAt ?? DateTimeOffset.MaxValue))
             {
                 ResetCredits.Add(new ResetCreditRowViewModel(
-                    "1 次",
-                    credit.ExpiresAt is { } expires ? $"{expires.ToLocalTime():yyyy年M月d日}到期" : "无到期时间",
-                    credit.ExpiresAt is { } expiryValue ? $"剩余 {DaysRemaining(expiryValue)} 天" : "有效期未返回",
-                    $"获得于 {credit.GrantedAt.ToLocalTime():yyyy年M月d日}",
-                    credit.Title ?? "Codex 重置奖励"));
+                    IsEnglish ? "1 use" : "1 次",
+                    credit.ExpiresAt is { } expires
+                        ? IsEnglish ? $"Expires {expires.ToLocalTime().ToString("MMM d, yyyy", EnglishCulture)}" : $"{expires.ToLocalTime():yyyy年M月d日}到期"
+                        : IsEnglish ? "No expiry time" : "无到期时间",
+                    credit.ExpiresAt is { } expiryValue
+                        ? IsEnglish ? $"{DaysRemaining(expiryValue)} days left" : $"剩余 {DaysRemaining(expiryValue)} 天"
+                        : IsEnglish ? "Validity unavailable" : "有效期未返回",
+                    IsEnglish ? $"Granted {credit.GrantedAt.ToLocalTime().ToString("MMM d, yyyy", EnglishCulture)}" : $"获得于 {credit.GrantedAt.ToLocalTime():yyyy年M月d日}",
+                    credit.Title ?? (IsEnglish ? "Codex reset reward" : "Codex 重置奖励")));
             }
         }
 
         HasResetCreditRows = ResetCredits.Count > 0;
         ResetCreditEmptyText = quota is null
-            ? "服务端未返回重置卡数据。"
+            ? IsEnglish ? "The service did not return reset credit data." : "服务端未返回重置卡数据。"
             : quota.ResetCreditDetailsComplete
-                ? "当前没有可用的单卡明细。"
+                ? IsEnglish ? "No individual credit details are currently available." : "当前没有可用的单卡明细。"
                 : ResetCreditCount.HasValue
-                    ? $"服务端当前只返回 {ResetCreditCount} 次可用，单卡授予时间和有效期暂未返回。"
-                    : "重置卡次数和单卡详情均不可用。";
+                    ? IsEnglish
+                        ? $"The service currently returns only {ResetCreditCount} available uses; grant and expiry times are unavailable."
+                        : $"服务端当前只返回 {ResetCreditCount} 次可用，单卡授予时间和有效期暂未返回。"
+                    : IsEnglish ? "Reset credit count and details are unavailable." : "重置卡次数和单卡详情均不可用。";
 
         ResetHistory.Clear();
         foreach (var item in snapshot.ResetHistory)
         {
             var (icon, description) = item.Kind switch
             {
-                ResetHistoryKind.Granted => ("\uE109", $"获得 {item.Count} 次"),
-                ResetHistoryKind.Expired => ("\uE711", $"已过期 {item.Count} 次"),
-                _ => ("\uE108", $"使用 {item.Count} 次")
+                ResetHistoryKind.Granted => ("\uE109", IsEnglish ? $"Granted {item.Count}" : $"获得 {item.Count} 次"),
+                ResetHistoryKind.Expired => ("\uE711", IsEnglish ? $"Expired {item.Count}" : $"已过期 {item.Count} 次"),
+                _ => ("\uE108", IsEnglish ? $"Used {item.Count}" : $"使用 {item.Count} 次")
             };
             ResetHistory.Add(new ResetHistoryRowViewModel(
                 icon,
-                item.OccurredAt.ToLocalTime().ToString("M月d日"),
+                item.OccurredAt.ToLocalTime().ToString(IsEnglish ? "MMM d" : "M月d日", IsEnglish ? EnglishCulture : ChineseCulture),
                 description,
-                item.IsInferred ? "推测" : string.Empty,
+                item.IsInferred ? IsEnglish ? "Inferred" : "推测" : string.Empty,
                 item.IsInferred));
         }
     }
 
     private void ApplyUsage(UsageAggregation usage, PricingSnapshot pricing)
     {
-        MonthCost = usage.EstimatedCostUsd.HasValue ? $"≈ ${usage.EstimatedCostUsd:0.00}" : "暂无定价";
+        MonthCost = usage.EstimatedCostUsd.HasValue ? $"≈ ${usage.EstimatedCostUsd:0.00}" : IsEnglish ? "No price" : "暂无定价";
         CacheHit = $"{usage.CacheHitPercent:0}%";
-        CacheSavings = usage.EstimatedCacheSavingsUsd.HasValue ? $"节省约 ${usage.EstimatedCacheSavingsUsd:0.00}" : "暂无估算";
+        CacheSavings = usage.EstimatedCacheSavingsUsd.HasValue
+            ? IsEnglish ? $"Saved about ${usage.EstimatedCacheSavingsUsd:0.00}" : $"节省约 ${usage.EstimatedCacheSavingsUsd:0.00}"
+            : IsEnglish ? "No estimate" : "暂无估算";
         PricingStatus = FormatPricingStatus(usage, pricing);
-        MonthTokens = FormatTokens(usage.TotalTokens);
+        MonthTokens = FormatDisplayTokens(usage.TotalTokens);
 
         var composition = usage.Composition;
         UncachedPercent = composition.UncachedInputPercent;
         CachedPercent = composition.CachedInputPercent;
         OutputPercent = composition.VisibleOutputPercent;
         ReasoningPercent = composition.ReasoningPercent;
-        UncachedLegend = $"{composition.UncachedInputPercent:0.0}%  ({FormatTokens(composition.UncachedInputTokens)})";
-        CachedLegend = $"{composition.CachedInputPercent:0.0}%  ({FormatTokens(composition.CachedInputTokens)})";
-        OutputLegend = $"{composition.VisibleOutputPercent:0.0}%  ({FormatTokens(composition.VisibleOutputTokens)})";
-        ReasoningLegend = $"{composition.ReasoningPercent:0.0}%  ({FormatTokens(composition.ReasoningTokens)})";
+        UncachedLegend = $"{composition.UncachedInputPercent:0.0}%  ({FormatDisplayTokens(composition.UncachedInputTokens)})";
+        CachedLegend = $"{composition.CachedInputPercent:0.0}%  ({FormatDisplayTokens(composition.CachedInputTokens)})";
+        OutputLegend = $"{composition.VisibleOutputPercent:0.0}%  ({FormatDisplayTokens(composition.VisibleOutputTokens)})";
+        ReasoningLegend = $"{composition.ReasoningPercent:0.0}%  ({FormatDisplayTokens(composition.ReasoningTokens)})";
     }
 
     private void SelectModelRange(string range)
@@ -686,9 +1039,9 @@ public sealed class MainViewModel : ObservableObject
         };
         ModelRangeLabel = _selectedModelRange switch
         {
-            "today" => "今天",
-            "30d" => "最近 30 天",
-            _ => "最近 7 天"
+            "today" => IsEnglish ? "Today" : "今天",
+            "30d" => IsEnglish ? "Last 30 days" : "最近 30 天",
+            _ => IsEnglish ? "Last 7 days" : "最近 7 天"
         };
         Models.Clear();
         if (usage is null)
@@ -697,8 +1050,8 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        ModelRangeTokens = FormatTokens(usage.TotalTokens);
-        ModelRangeCost = usage.EstimatedCostUsd.HasValue ? $"≈ ${usage.EstimatedCostUsd:0.00}" : "暂无定价";
+        ModelRangeTokens = FormatDisplayTokens(usage.TotalTokens);
+        ModelRangeCost = usage.EstimatedCostUsd.HasValue ? $"≈ ${usage.EstimatedCostUsd:0.00}" : IsEnglish ? "No price" : "暂无定价";
         ModelRangeCacheHit = $"{usage.CacheHitPercent:0}%";
         ModelPricingStatus = FormatPricingStatus(usage, null);
         var colors = new[] { "#3B76E8", "#11A9C2", "#8667E8", "#E6A63B", "#E86C91", "#7BC2DA" };
@@ -708,7 +1061,7 @@ public sealed class MainViewModel : ObservableObject
             var remainder = usage.Models.Skip(5).ToArray();
             var priced = remainder.Where(item => item.EstimatedCostUsd.HasValue).ToArray();
             modelRows.Add(new ModelUsageSummary(
-                "其他",
+                IsEnglish ? "Other" : "其他",
                 UsageCalculator.SaturatingSum(remainder.Select(item => item.InputTokens)),
                 UsageCalculator.SaturatingSum(remainder.Select(item => item.CachedInputTokens)),
                 UsageCalculator.SaturatingSum(remainder.Select(item => item.OutputTokens)),
@@ -723,8 +1076,8 @@ public sealed class MainViewModel : ObservableObject
             var share = usage.TotalTokens <= 0 ? 0 : (double)model.TotalTokens / usage.TotalTokens * 100;
             Models.Add(new ModelUsageRowViewModel(
                 model.Model,
-                FormatTokens(model.TotalTokens),
-                $"{model.CacheHitPercent:0}% 缓存",
+                FormatDisplayTokens(model.TotalTokens),
+                IsEnglish ? $"{model.CacheHitPercent:0}% cached" : $"{model.CacheHitPercent:0}% 缓存",
                 model.EstimatedCostUsd.HasValue ? $"${model.EstimatedCostUsd:0.00}" : "—",
                 share,
                 $"{share:0}%",
@@ -750,35 +1103,113 @@ public sealed class MainViewModel : ObservableObject
         foreach (var day in month)
         {
             DailyUsage.Add(new DailyUsageRowViewModel(
-                day.Date.ToString("M月d日 dddd", CultureInfo.GetCultureInfo("zh-CN")),
-                FormatTokens(day.Tokens),
+                day.Date.ToString(IsEnglish ? "MMM d dddd" : "M月d日 dddd", IsEnglish ? EnglishCulture : ChineseCulture),
+                FormatDisplayTokens(day.Tokens),
                 (double)day.Tokens / peak * 100));
         }
     }
 
-    private static string FormatReset(RateLimitWindowSnapshot? window)
-        => window?.ResetsAt is { } reset ? $"{reset.ToLocalTime():M月d日 HH:mm} 重置" : "重置时间未返回";
+    private bool IsUsableWindow(RateLimitWindowSnapshot? window, long expectedMinutes)
+        => window?.WindowDurationMinutes == expectedMinutes && window.UsedPercent.HasValue;
 
-    private static string StaleSuffix(bool stale, DateTimeOffset? updatedAt)
-        => stale && updatedAt.HasValue ? $"（上次成功 {updatedAt.Value.ToLocalTime():M/d HH:mm}）" : string.Empty;
+    private string FormatReset(RateLimitWindowSnapshot? window)
+        => window?.ResetsAt is { } reset
+            ? IsEnglish ? $"Resets {reset.ToLocalTime().ToString("MMM d HH:mm", EnglishCulture)}" : $"{reset.ToLocalTime():M月d日 HH:mm} 重置"
+            : IsEnglish ? "Reset time unavailable" : "重置时间未返回";
+
+    private string FormatCompactReset(RateLimitWindowSnapshot? window)
+        => window?.ResetsAt is { } reset
+            ? IsEnglish ? $"Resets {reset.ToLocalTime():M/d HH:mm}" : $"{reset.ToLocalTime():M/d HH:mm} 重置"
+            : IsEnglish ? "Reset unavailable" : "重置时间未返回";
+
+    private string FormatDateTime(DateTimeOffset value)
+        => value.ToLocalTime().ToString(IsEnglish ? "MMM d HH:mm" : "M月d日 HH:mm", IsEnglish ? EnglishCulture : ChineseCulture);
+
+    private string FormatWarning(string? warning)
+    {
+        if (!IsEnglish || string.IsNullOrWhiteSpace(warning))
+        {
+            return warning ?? string.Empty;
+        }
+
+        return string.Join("; ", warning.Split('；', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(LocalizeWarningPart));
+    }
+
+    private static string LocalizeWarningPart(string warning)
+    {
+        if (warning.Equals("额度不可用", StringComparison.Ordinal))
+        {
+            return "Quota unavailable";
+        }
+
+        if (warning.Equals("整体读取超过截止时间", StringComparison.Ordinal))
+        {
+            return "Codex app-server read exceeded its deadline";
+        }
+
+        var localized = warning
+            .Replace("通用 5 小时额度", "General 5-hour quota", StringComparison.Ordinal)
+            .Replace("周额度", "Weekly quota", StringComparison.Ordinal)
+            .Replace("Spark 额度", "Spark quota", StringComparison.Ordinal)
+            .Replace("重置卡", "Reset credits", StringComparison.Ordinal)
+            .Replace("官方每日用量", "Official daily usage", StringComparison.Ordinal)
+            .Replace("官方汇总", "Official summary", StringComparison.Ordinal)
+            .Replace("暂不可用，显示 ", " unavailable; showing last successful value from ", StringComparison.Ordinal)
+            .Replace(" 的上次成功值", string.Empty, StringComparison.Ordinal)
+            .Replace("Codex app-server 暂时退避，", "Codex app-server is temporarily backed off; retry after ", StringComparison.Ordinal)
+            .Replace(" 后重试", string.Empty, StringComparison.Ordinal)
+            .Replace("账户：", "Account: ", StringComparison.Ordinal)
+            .Replace("额度：", "Quota: ", StringComparison.Ordinal)
+            .Replace("趋势：", "Usage trends: ", StringComparison.Ordinal)
+            .Replace("Codex app-server：", "Codex app-server: ", StringComparison.Ordinal)
+            .Replace("价格：", "Pricing: ", StringComparison.Ordinal)
+            .Replace("本地 rollout：", "Local rollout: ", StringComparison.Ordinal);
+        return Regex.Replace(localized, @"(?<month>\d{1,2})月(?<day>\d{1,2})日", "${month}/${day}");
+    }
+
+    private string StaleSuffix(bool stale, DateTimeOffset? updatedAt)
+        => stale && updatedAt.HasValue
+            ? IsEnglish
+                ? $" (last successful {updatedAt.Value.ToLocalTime():M/d HH:mm})"
+                : $"（上次成功 {updatedAt.Value.ToLocalTime():M/d HH:mm}）"
+            : string.Empty;
 
     private static int DaysRemaining(DateTimeOffset expiry)
         => Math.Max(0, (int)Math.Ceiling((expiry.ToLocalTime() - DateTimeOffset.Now).TotalDays));
 
-    private static string FormatPricingStatus(UsageAggregation usage, PricingSnapshot? pricing)
+    private string FormatPricingStatus(UsageAggregation usage, PricingSnapshot? pricing)
     {
         var pricedTokens = usage.Models
             .Where(item => item.EstimatedCostUsd.HasValue);
         var coveredTokens = UsageCalculator.SaturatingSum(pricedTokens.Select(item => item.TotalTokens));
         var coverage = usage.TotalTokens <= 0 ? 0 : (double)coveredTokens / usage.TotalTokens * 100;
         var source = pricing is null
-            ? "公开 API 单价"
-            : pricing.IsLive ? "本次启动获取的官方价格" : pricing.StatusMessage ?? "价格快照";
-        return $"{source} · 覆盖 {coverage:0}% Token";
+            ? IsEnglish ? "Public API prices" : "公开 API 单价"
+            : pricing.IsLive
+                ? IsEnglish ? "Official prices fetched at startup" : "本次启动获取的官方价格"
+                : IsEnglish ? "Cached or built-in price snapshot" : pricing.StatusMessage ?? "价格快照";
+        return IsEnglish ? $"{source} · {coverage:0}% token coverage" : $"{source} · 覆盖 {coverage:0}% Token";
     }
 
     public static string FormatTokens(long value)
         => TokenDisplayFormatter.Format(value);
+
+    private string FormatDisplayTokens(long value)
+    {
+        if (!IsEnglish)
+        {
+            return FormatTokens(value);
+        }
+
+        return value switch
+        {
+            >= 1_000_000_000 => $"{value / 1_000_000_000d:0.##}B",
+            >= 1_000_000 => $"{value / 1_000_000d:0.##}M",
+            >= 1_000 => $"{value / 1_000d:0.##}K",
+            _ => value.ToString(CultureInfo.InvariantCulture)
+        };
+    }
 
     private async Task PersistNotificationsAsync(bool value)
     {
@@ -788,7 +1219,9 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            Warning = $"通知设置保存失败：{exception.Message}";
+            Warning = IsEnglish
+                ? $"Failed to save notification setting: {exception.Message}"
+                : $"通知设置保存失败：{exception.Message}";
             SyncStatusBrush = MediaBrushes.DarkGoldenrod;
         }
     }
@@ -823,9 +1256,70 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
-        OnPropertyChanged(nameof(ThemeIcon));
-        OnPropertyChanged(nameof(ThemeToolTip));
+        OnPropertyChanged(nameof(IsLightMode));
         ThemeChanged?.Invoke(this, new ThemeChangedEventArgs(value));
+        return true;
+    }
+
+    private void SetEnglish(bool value, bool persist)
+    {
+        lock (_lifecycleSync)
+        {
+            if (persist && _shutdownStarted)
+            {
+                return;
+            }
+
+            var changed = ApplyEnglish(value);
+            if (!changed && !(persist && _languageSettingsReadPending))
+            {
+                return;
+            }
+
+            if (persist)
+            {
+                _languageSettingsVersion++;
+                _languageSettingsWriteTask = PersistLanguageAsync(_languageSettingsWriteTask, value);
+            }
+        }
+    }
+
+    private bool ApplyEnglish(bool value)
+    {
+        if (!SetProperty(ref _isEnglish, value, nameof(IsEnglish)))
+        {
+            return false;
+        }
+
+        OnPropertyChanged(nameof(IsChinese));
+        OnPropertyChanged(nameof(ResetCreditCountText));
+        UpdateLocalizedUpdateStatus();
+        LanguageChanged?.Invoke(this, new LanguageChangedEventArgs(value));
+        StartupStatus = StartupEnabled
+            ? IsEnglish ? "Enabled · runs in the background after sign-in" : "已启用 · 登录后在后台运行"
+            : IsEnglish ? "Off by default; will not start with Windows" : "默认关闭，登录 Windows 时不会自动运行";
+        if (_lastSnapshot is not null)
+        {
+            Apply(_lastSnapshot);
+        }
+        else
+        {
+            SyncText = IsEnglish ? "Waiting to sync" : "等待同步";
+            WeeklyRemainingText = IsEnglish ? "Unavailable" : "不可用";
+            WeeklyResetText = IsEnglish ? "Not returned by the service" : "服务端未返回";
+            PaceText = IsEnglish ? "Waiting for quota data" : "等待额度数据";
+            PaceDetailText = IsEnglish ? "Baseline: split evenly across 7 days, about 14.3% daily" : "基准：7 天均分，每天约 14.3%";
+            PaceWindowText = IsEnglish ? "Each segment represents 24 hours of the quota window" : "每格代表额度窗口中的 24 小时";
+            ResetSummary = IsEnglish ? "Details unavailable" : "详情未返回";
+            ResetNearestExpiry = IsEnglish ? "No expiry information" : "暂无到期信息";
+            PricingStatus = IsEnglish ? "Waiting for prices" : "等待价格同步";
+            ResetDetailsStatus = IsEnglish ? "Not synchronized yet" : "尚未同步";
+            ResetCreditEmptyText = IsEnglish ? "Reset credit details have not synchronized yet" : "尚未同步重置卡明细";
+            ModelRangeLabel = IsEnglish ? "Last 7 days" : "最近 7 天";
+            ResetNotificationStatus = IsEnglish ? "Waiting for validity data" : "等待获取有效期";
+            ModelPricingStatus = IsEnglish ? "Waiting for prices" : "等待价格同步";
+        }
+
         return true;
     }
 
@@ -915,6 +1409,99 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private async Task InitializeLanguageSettingAsync(CancellationToken cancellationToken)
+    {
+        long version;
+        lock (_lifecycleSync)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_shutdownStarted)
+            {
+                return;
+            }
+
+            _languageSettingsReadPending = true;
+            version = _languageSettingsVersion;
+        }
+
+        bool value;
+        try
+        {
+            value = await _dashboardService.GetEnglishEnabledAsync(cancellationToken);
+        }
+        catch
+        {
+            lock (_lifecycleSync)
+            {
+                _languageSettingsReadPending = false;
+            }
+
+            throw;
+        }
+
+        lock (_lifecycleSync)
+        {
+            _languageSettingsReadPending = false;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_shutdownStarted || version != _languageSettingsVersion)
+            {
+                return;
+            }
+
+            ApplyEnglish(value);
+        }
+    }
+
+    private async Task InitializeUpdateCheckSettingAsync(CancellationToken cancellationToken)
+    {
+        if (_updateCheckService is null)
+        {
+            return;
+        }
+
+        long version;
+        lock (_lifecycleSync)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_shutdownStarted)
+            {
+                return;
+            }
+
+            _updateSettingsReadPending = true;
+            version = _updateSettingsVersion;
+        }
+
+        bool value;
+        try
+        {
+            value = await _updateCheckService.GetAutoCheckEnabledAsync(cancellationToken);
+        }
+        catch
+        {
+            lock (_lifecycleSync)
+            {
+                _updateSettingsReadPending = false;
+            }
+
+            throw;
+        }
+
+        lock (_lifecycleSync)
+        {
+            _updateSettingsReadPending = false;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_shutdownStarted || version != _updateSettingsVersion)
+            {
+                return;
+            }
+
+            SetProperty(ref _autoUpdateCheckEnabled, value, nameof(AutoUpdateCheckEnabled));
+            _updateUiStatus = value ? UpdateUiStatus.Ready : UpdateUiStatus.Disabled;
+            UpdateLocalizedUpdateStatus();
+        }
+    }
+
     private async Task PersistThemeAsync(bool value)
     {
         try
@@ -923,8 +1510,50 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            Warning = $"主题设置保存失败：{exception.Message}";
+            Warning = IsEnglish
+                ? $"Failed to save theme setting: {exception.Message}"
+                : $"主题设置保存失败：{exception.Message}";
             SyncStatusBrush = MediaBrushes.DarkGoldenrod;
+        }
+    }
+
+    private async Task PersistLanguageAsync(Task previousWrite, bool value)
+    {
+        try
+        {
+            await previousWrite;
+            await _dashboardService.SetEnglishEnabledAsync(value);
+        }
+        catch (Exception exception)
+        {
+            Warning = IsEnglish
+                ? $"Failed to save language setting: {exception.Message}"
+                : $"语言设置保存失败：{exception.Message}";
+            SyncStatusBrush = MediaBrushes.DarkGoldenrod;
+        }
+    }
+
+    private async Task PersistUpdateSettingAsync(Task previousWrite, bool value, long version)
+    {
+        try
+        {
+            await previousWrite;
+            await _updateCheckService!.SetAutoCheckEnabledAsync(value, _updateCancellation.Token);
+        }
+        catch (OperationCanceledException) when (_updateCancellation.IsCancellationRequested)
+        {
+            // Application shutdown owns this cancellation.
+        }
+        catch
+        {
+            lock (_lifecycleSync)
+            {
+                if (!_shutdownStarted && version == _updateSettingsVersion)
+                {
+                    _updateUiStatus = UpdateUiStatus.Failed;
+                    UpdateLocalizedUpdateStatus();
+                }
+            }
         }
     }
 
@@ -949,7 +1578,7 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
-        ApplyStartupResult(result, "读取");
+        ApplyStartupResult(result, IsEnglish ? "read" : "读取");
     }
 
     private async Task PersistStartupAsync(Task previousWrite, bool value, long version)
@@ -972,7 +1601,7 @@ public sealed class MainViewModel : ObservableObject
             }
         }
 
-        ApplyStartupResult(result, "保存");
+        ApplyStartupResult(result, IsEnglish ? "save" : "保存");
     }
 
     private void ApplyStartupResult(StartupRegistrationResult result, string operation)
@@ -991,13 +1620,17 @@ public sealed class MainViewModel : ObservableObject
 
         StartupStatus = result.IsEnabled switch
         {
-            true when result.Error is null => "已启用 · 登录后在后台运行",
-            false when result.Error is null => "默认关闭，登录 Windows 时不会自动运行",
-            _ => $"开机启动状态不可用 · 保持上次确认的{(actual ? "开启" : "关闭")}状态"
+            true when result.Error is null => IsEnglish ? "Enabled · runs in the background after sign-in" : "已启用 · 登录后在后台运行",
+            false when result.Error is null => IsEnglish ? "Off by default; will not start with Windows" : "默认关闭，登录 Windows 时不会自动运行",
+            _ => IsEnglish
+                ? $"Startup status unavailable · keeping the last confirmed {(actual ? "on" : "off")} state"
+                : $"开机启动状态不可用 · 保持上次确认的{(actual ? "开启" : "关闭")}状态"
         };
         if (result.Error is not null)
         {
-            Warning = $"开机自启动设置{operation}失败：{result.Error}";
+            Warning = IsEnglish
+                ? $"Failed to {operation} startup setting: {result.Error}"
+                : $"开机自启动设置{operation}失败：{result.Error}";
             SyncStatusBrush = MediaBrushes.DarkGoldenrod;
         }
     }
@@ -1021,6 +1654,17 @@ public sealed class MainViewModel : ObservableObject
     }
 }
 
+internal enum UpdateUiStatus
+{
+    Ready,
+    Disabled,
+    Checking,
+    Latest,
+    Available,
+    Failed,
+    Snoozed
+}
+
 public sealed class ResetExpiryNotificationEventArgs(string message) : EventArgs
 {
     public string Message { get; } = message;
@@ -1029,4 +1673,9 @@ public sealed class ResetExpiryNotificationEventArgs(string message) : EventArgs
 public sealed class ThemeChangedEventArgs(bool isDarkMode) : EventArgs
 {
     public bool IsDarkMode { get; } = isDarkMode;
+}
+
+public sealed class LanguageChangedEventArgs(bool isEnglish) : EventArgs
+{
+    public bool IsEnglish { get; } = isEnglish;
 }

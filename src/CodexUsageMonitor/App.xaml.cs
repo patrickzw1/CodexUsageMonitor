@@ -26,6 +26,7 @@ public partial class App : System.Windows.Application
     protected override async void OnStartup(System.Windows.StartupEventArgs e)
     {
         base.OnStartup(e);
+        LocalizationManager.Apply(isEnglish: false);
         ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
         var explicitShow = e.Args.Contains("--show", StringComparer.OrdinalIgnoreCase)
                            || e.Args.Any(arg => arg.StartsWith("--page=", StringComparison.OrdinalIgnoreCase))
@@ -41,13 +42,23 @@ public partial class App : System.Windows.Application
         var startupService = new WindowsStartupRegistrationService(
             new WindowsRunRegistryBackend(),
             () => Environment.ProcessPath);
-        var viewModel = new MainViewModel(DashboardService.CreateDefault(), startupService);
+        var dashboardService = DashboardService.CreateDefault();
+        var updateCheckService = GitHubUpdateCheckService.CreateDefault(dashboardService);
+        var viewModel = new MainViewModel(dashboardService, startupService, updateCheckService);
         _viewModel = viewModel;
         viewModel.ThemeChanged += (_, args) => ThemeManager.Apply(args.IsDarkMode);
+        viewModel.LanguageChanged += (_, args) =>
+        {
+            LocalizationManager.Apply(args.IsEnglish);
+            if (_notifyIcon is not null)
+            {
+                _notifyIcon.Text = LocalizationManager.Get("LocAppTitle");
+            }
+        };
         viewModel.ResetExpiryNotificationRequested += (_, args) =>
             _notifyIcon?.ShowBalloonTip(
                 7_000,
-                "Codex 重置卡即将到期",
+                viewModel.IsEnglish ? "Codex reset credits expiring soon" : "Codex 重置卡即将到期",
                 args.Message,
                 Forms.ToolTipIcon.Warning);
         var requestedPage = e.Args
@@ -75,7 +86,7 @@ public partial class App : System.Windows.Application
         _notifyIcon = new Forms.NotifyIcon
         {
             Icon = _applicationIcon ?? SystemIcons.Application,
-            Text = "Codex 用量",
+            Text = LocalizationManager.Get("LocAppTitle"),
             Visible = true
         };
         _notifyIcon.MouseUp += (_, args) =>

@@ -68,7 +68,8 @@ public sealed class CodexAppServerClient : ICodexAppServerClient
         QuotaSnapshot? quota = null;
         OfficialUsageSnapshot? usage = null;
         var accountComplete = false;
-        var generalQuotaComplete = false;
+        var generalFiveHourQuotaComplete = false;
+        var generalWeeklyQuotaComplete = false;
         var sparkQuotaComplete = false;
         var resetCountComplete = false;
         var resetDetailsComplete = false;
@@ -119,7 +120,8 @@ public sealed class CodexAppServerClient : ICodexAppServerClient
                 var quotaResult = AppServerResponseParser.ParseQuotaDetailed(
                     await ReadResultAsync(process, stdout, 3, deadline.Token));
                 quota = quotaResult.Snapshot;
-                generalQuotaComplete = quotaResult.GeneralComplete;
+                generalFiveHourQuotaComplete = quotaResult.GeneralFiveHourComplete;
+                generalWeeklyQuotaComplete = quotaResult.GeneralWeeklyComplete;
                 sparkQuotaComplete = quotaResult.SparkComplete;
                 resetCountComplete = quotaResult.ResetCreditCountComplete;
                 resetDetailsComplete = quotaResult.ResetCreditDetailsComplete;
@@ -229,7 +231,8 @@ public sealed class CodexAppServerClient : ICodexAppServerClient
         {
             Completeness = new AppServerCompleteness(
                 accountComplete,
-                generalQuotaComplete,
+                generalFiveHourQuotaComplete,
+                generalWeeklyQuotaComplete,
                 sparkQuotaComplete,
                 resetCountComplete,
                 resetDetailsComplete,

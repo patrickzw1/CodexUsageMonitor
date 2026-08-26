@@ -186,6 +186,103 @@
             </Setter>
         </Style>
 
+        <Style x:Key="UpdateEntryButton" TargetType="Button">
+            <Setter Property="Width" Value="30" />
+            <Setter Property="Height" Value="30" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="Foreground" Value="{DynamicResource IndigoBrush}" />
+            <Setter Property="Background" Value="{DynamicResource IndigoSubtleBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="15">
+                            <Grid>
+                                <Popup x:Name="HoverLabel"
+                                       PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
+                                       Placement="Top"
+                                       VerticalOffset="-8"
+                                       AllowsTransparency="True"
+                                       StaysOpen="True"
+                                       IsHitTestVisible="False"
+                                       Focusable="False">
+                                    <Border Background="{DynamicResource BlueBrush}"
+                                            CornerRadius="15"
+                                            Padding="13,6">
+                                        <TextBlock Text="{DynamicResource LocUpdateAvailable}"
+                                                   Foreground="White"
+                                                   FontFamily="{StaticResource UiFont}"
+                                                   FontSize="12"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="NoWrap" />
+                                    </Border>
+                                </Popup>
+                                <Viewbox Width="17" Height="17" HorizontalAlignment="Right" Margin="0,0,7,0">
+                                    <Canvas Width="20" Height="20">
+                                        <Path Data="M 10,2 L 10,12 M 6,8 L 10,12 L 14,8 M 4,16 L 16,16"
+                                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                                              StrokeThickness="1.8"
+                                              StrokeStartLineCap="Round"
+                                              StrokeEndLineCap="Round"
+                                              StrokeLineJoin="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="White" />
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource BlueBrush}" />
+                                <Setter TargetName="HoverLabel" Property="IsOpen" Value="True" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter Property="Foreground" Value="White" />
+                                <Setter TargetName="Root" Property="Background" Value="{DynamicResource BlueBrush}" />
+                                <Setter TargetName="HoverLabel" Property="IsOpen" Value="True" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.82" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="UpdatePrimaryButton" TargetType="Button">
+            <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="{DynamicResource BlueBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.9" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.75" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="White" />
+                                <Setter TargetName="Root" Property="BorderThickness" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="CompactActionButton" TargetType="Button">
             <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
             <Setter Property="FontSize" Value="12" />
@@ -352,6 +449,12 @@
         <Style x:Key="RangeToggle" TargetType="ToggleButton" BasedOn="{StaticResource SegmentedTab}">
             <Setter Property="Height" Value="34" />
             <Setter Property="FontSize" Value="12" />
+        </Style>
+
+        <Style x:Key="SettingsChoice" TargetType="ToggleButton" BasedOn="{StaticResource SegmentedTab}">
+            <Setter Property="Height" Value="34" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Medium" />
         </Style>
 
         <Style x:Key="ToggleSwitch" TargetType="ToggleButton">

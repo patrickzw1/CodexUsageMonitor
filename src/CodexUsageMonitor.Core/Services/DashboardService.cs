@@ -1,9 +1,10 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using CodexUsageMonitor.Core.Models;
 
 namespace CodexUsageMonitor.Core.Services;
 
-public sealed class DashboardService : IDashboardService
+public sealed class DashboardService : IDashboardService, IUpdateCheckSettingsStore
 {
     private static readonly TimeSpan[] AppServerBackoff =
     {
@@ -85,9 +86,11 @@ public sealed class DashboardService : IDashboardService
         var currentQuota = appServer.Quota;
         var storedQuotaValue = storedQuota?.Quota;
 
-        var general = completeness.GeneralQuota
-            ? currentQuota?.General
-            : storedQuotaValue?.General ?? currentQuota?.General;
+        var general = MergeGeneralQuota(
+            currentQuota?.General,
+            storedQuotaValue?.General,
+            completeness.GeneralFiveHourQuota,
+            completeness.GeneralWeeklyQuota);
         var spark = completeness.SparkQuota
             ? currentQuota?.Spark
             : storedQuotaValue?.Spark ?? currentQuota?.Spark;
@@ -120,12 +123,22 @@ public sealed class DashboardService : IDashboardService
         var accountUpdatedAt = completeness.Account && appServer.Account is not null
             ? appServer.CapturedAt
             : storedQuota?.AccountCapturedAt;
-        var generalUpdatedAt = completeness.GeneralQuota ? appServer.CapturedAt : storedQuota?.GeneralCapturedAt;
+        var generalFiveHourUpdatedAt = completeness.GeneralFiveHourQuota
+            ? appServer.CapturedAt
+            : storedQuota?.GeneralFiveHourCapturedAt;
+        var generalWeeklyUpdatedAt = completeness.GeneralWeeklyQuota
+            ? appServer.CapturedAt
+            : storedQuota?.GeneralWeeklyCapturedAt;
         var sparkUpdatedAt = completeness.SparkQuota ? appServer.CapturedAt : storedQuota?.SparkCapturedAt;
         var resetUpdatedAt = authoritativeNoResetCredits || completeness.ResetCreditDetails
             ? appServer.CapturedAt
             : storedQuota?.ResetCreditsCapturedAt;
-        var generalStale = !completeness.GeneralQuota && storedQuotaValue?.General is not null;
+        var generalFiveHourStale = !completeness.GeneralFiveHourQuota
+                                   && storedQuotaValue?.General?.FiveHour is not null
+                                   && general?.FiveHour is not null;
+        var generalWeeklyStale = !completeness.GeneralWeeklyQuota
+                                 && storedQuotaValue?.General?.Weekly is not null
+                                 && general?.Weekly is not null;
         var sparkStale = !completeness.SparkQuota && storedQuotaValue?.Spark is not null && quota?.Spark is not null;
         var resetStale = !authoritativeNoResetCredits
                          && !(completeness.ResetCreditCount && completeness.ResetCreditDetails)
@@ -144,7 +157,8 @@ public sealed class DashboardService : IDashboardService
                 quota,
                 appServer.CapturedAt,
                 accountUpdatedAt,
-                generalUpdatedAt,
+                generalFiveHourUpdatedAt,
+                generalWeeklyUpdatedAt,
                 sparkUpdatedAt,
                 resetUpdatedAt,
                 authoritativeNoResetCredits
@@ -153,7 +167,8 @@ public sealed class DashboardService : IDashboardService
                 cancellationToken);
         }
 
-        AddPartitionWarning(warnings, "周额度", generalStale, generalUpdatedAt);
+        AddPartitionWarning(warnings, "通用 5 小时额度", generalFiveHourStale, generalFiveHourUpdatedAt);
+        AddPartitionWarning(warnings, "周额度", generalWeeklyStale, generalWeeklyUpdatedAt);
         AddPartitionWarning(warnings, "Spark 额度", sparkStale, sparkUpdatedAt);
         AddPartitionWarning(warnings, "重置卡", resetStale, resetUpdatedAt);
         if (quota is null)
@@ -195,8 +210,8 @@ public sealed class DashboardService : IDashboardService
         AddPartitionWarning(warnings, "官方汇总", summaryStale, summaryUpdatedAt);
         AddPartitionWarning(warnings, "官方每日用量", dailyStale, dailyUpdatedAt);
 
-        var quotaUpdatedAt = generalUpdatedAt ?? storedQuota?.CapturedAt;
-        var quotaStale = generalStale || sparkStale || resetStale;
+        var quotaUpdatedAt = Latest(generalFiveHourUpdatedAt, generalWeeklyUpdatedAt) ?? storedQuota?.CapturedAt;
+        var quotaStale = generalFiveHourStale || generalWeeklyStale || sparkStale || resetStale;
         var officialUsageUpdatedAt = dailyUpdatedAt ?? summaryUpdatedAt;
         var officialUsageStale = summaryStale || dailyStale;
 
@@ -206,7 +221,7 @@ public sealed class DashboardService : IDashboardService
         var usageEvents = await _repository.QueryEventsAsync(historyStart, historyEnd, cancellationToken);
 
         var history = await _repository.GetResetHistoryAsync(cancellationToken: cancellationToken);
-        var pace = generalStale
+        var pace = generalWeeklyStale
             ? WeeklyPace.Unavailable
             : UsageCalculator.CalculateWeeklyPace(quota?.General?.Weekly, nowUtc);
         var snapshot = new DashboardSnapshot(
@@ -228,8 +243,8 @@ public sealed class DashboardService : IDashboardService
             string.Join("；", warnings.Where(message => !string.IsNullOrWhiteSpace(message)).Distinct()))
         {
             Freshness = new DashboardPartitionFreshness(
-                generalUpdatedAt,
-                generalStale,
+                generalWeeklyUpdatedAt,
+                generalWeeklyStale,
                 sparkUpdatedAt,
                 sparkStale,
                 resetUpdatedAt,
@@ -238,6 +253,12 @@ public sealed class DashboardService : IDashboardService
                 summaryStale,
                 dailyUpdatedAt,
                 dailyStale)
+            {
+                GeneralFiveHourQuotaUpdatedAt = generalFiveHourUpdatedAt,
+                IsGeneralFiveHourQuotaStale = generalFiveHourStale,
+                GeneralWeeklyQuotaUpdatedAt = generalWeeklyUpdatedAt,
+                IsGeneralWeeklyQuotaStale = generalWeeklyStale
+            }
         };
 
         return snapshot;
@@ -252,6 +273,33 @@ public sealed class DashboardService : IDashboardService
             events.Where(item => item.TimestampUtc >= from && item.TimestampUtc < to),
             prices);
 
+    private static QuotaBucketSnapshot? MergeGeneralQuota(
+        QuotaBucketSnapshot? current,
+        QuotaBucketSnapshot? stored,
+        bool fiveHourComplete,
+        bool weeklyComplete)
+    {
+        var fiveHour = fiveHourComplete ? current?.FiveHour : stored?.FiveHour ?? current?.FiveHour;
+        var weekly = weeklyComplete ? current?.Weekly : stored?.Weekly ?? current?.Weekly;
+        if (fiveHour is null && weekly is null)
+        {
+            return null;
+        }
+
+        var metadata = fiveHourComplete || weeklyComplete ? current ?? stored : stored ?? current;
+        return new QuotaBucketSnapshot(
+            metadata?.LimitId ?? "codex",
+            metadata?.LimitName,
+            metadata?.PlanType,
+            fiveHour,
+            weekly);
+    }
+
+    private static DateTimeOffset? Latest(DateTimeOffset? first, DateTimeOffset? second)
+        => first.HasValue && second.HasValue
+            ? (first.Value > second.Value ? first : second)
+            : first ?? second;
+
     public Task<bool> GetNotificationsEnabledAsync(CancellationToken cancellationToken = default)
         => GetBoolSettingAsync("reset_expiry_notifications", true, cancellationToken);
 
@@ -263,6 +311,39 @@ public sealed class DashboardService : IDashboardService
 
     public Task SetDarkModeEnabledAsync(bool value, CancellationToken cancellationToken = default)
         => SetBoolSettingAsync("dark_mode_enabled", value, cancellationToken);
+
+    public Task<bool> GetEnglishEnabledAsync(CancellationToken cancellationToken = default)
+        => GetBoolSettingAsync("english_language_enabled", false, cancellationToken);
+
+    public Task SetEnglishEnabledAsync(bool value, CancellationToken cancellationToken = default)
+        => SetBoolSettingAsync("english_language_enabled", value, cancellationToken);
+
+    public Task<bool> GetAutoUpdateCheckEnabledAsync(CancellationToken cancellationToken = default)
+        => GetBoolSettingAsync("auto_update_check_enabled", true, cancellationToken);
+
+    public Task SetAutoUpdateCheckEnabledAsync(bool value, CancellationToken cancellationToken = default)
+        => SetBoolSettingAsync("auto_update_check_enabled", value, cancellationToken);
+
+    public async Task<UpdateCheckCache> GetUpdateCheckCacheAsync(CancellationToken cancellationToken = default)
+    {
+        var json = await GetStringSettingAsync("update_check_cache", cancellationToken);
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return UpdateCheckCache.Empty;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<UpdateCheckCache>(json) ?? UpdateCheckCache.Empty;
+        }
+        catch (JsonException)
+        {
+            return UpdateCheckCache.Empty;
+        }
+    }
+
+    public Task SetUpdateCheckCacheAsync(UpdateCheckCache cache, CancellationToken cancellationToken = default)
+        => SetStringSettingAsync("update_check_cache", JsonSerializer.Serialize(cache), cancellationToken);
 
     public string DatabasePath => _repository.DatabasePath;
 
@@ -290,6 +371,34 @@ public sealed class DashboardService : IDashboardService
         try
         {
             await _repository.SetBoolSettingAsync(key, value, cancellationToken);
+        }
+        finally
+        {
+            _settingsGate.Release();
+        }
+    }
+
+    private async Task<string?> GetStringSettingAsync(string key, CancellationToken cancellationToken)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await _settingsGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await _repository.GetStringSettingAsync(key, cancellationToken);
+        }
+        finally
+        {
+            _settingsGate.Release();
+        }
+    }
+
+    private async Task SetStringSettingAsync(string key, string value, CancellationToken cancellationToken)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await _settingsGate.WaitAsync(cancellationToken);
+        try
+        {
+            await _repository.SetStringSettingAsync(key, value, cancellationToken);
         }
         finally
         {

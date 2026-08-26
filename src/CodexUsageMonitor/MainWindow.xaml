@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:CodexUsageMonitor.Views"
-        Title="Codex 用量"
+        Title="{DynamicResource LocAppTitle}"
         Icon="Assets/AppIcon.ico"
         Width="536"
         Height="950"
@@ -33,33 +33,40 @@
 
                 <Grid Margin="22,16,18,12" Background="Transparent" MouseLeftButtonDown="Header_MouseLeftButtonDown">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="Codex 用量" FontSize="22" FontWeight="SemiBold" />
+                    <StackPanel x:Name="TitleIdentityPanel" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource LocAppTitle}" FontSize="22" FontWeight="SemiBold" />
                         <Border Height="24" MinWidth="43" Background="{DynamicResource IndigoSubtleBrush}" CornerRadius="8" Margin="9,0,0,0" Padding="8,0">
                             <TextBlock Text="{Binding PlanDisplay}" Foreground="{DynamicResource IndigoBrush}" FontSize="11" FontWeight="SemiBold"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" />
                         </Border>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="7" Height="7" Fill="{Binding SyncStatusBrush}" Margin="0,0,6,0" />
-                        <TextBlock Text="{Binding SyncText}" Foreground="{DynamicResource MutedBrush}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" />
-                        <Button Style="{StaticResource IconButton}" Click="MinimizeButton_Click" ToolTip="最小化到托盘">
+                    <StackPanel x:Name="HeaderActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse x:Name="SyncStatusDot" Width="7" Height="7" Fill="{Binding SyncStatusBrush}" Margin="0,0,6,0" />
+                        <TextBlock x:Name="SyncStatusText" Text="{Binding SyncText}" Foreground="{DynamicResource MutedBrush}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" />
+                        <Grid x:Name="UpdateEntryHost" Width="30" Height="30" Margin="2,0,4,0" Panel.ZIndex="20">
+                            <Button x:Name="UpdateButton"
+                                    Style="{StaticResource UpdateEntryButton}"
+                                    Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVisibility}}"
+                                    Command="{Binding ToggleUpdateFlyoutCommand}"
+                                    AutomationProperties.Name="{DynamicResource LocUpdateAvailable}" />
+                        </Grid>
+                        <Button x:Name="MinimizeButton" Style="{StaticResource IconButton}" Click="MinimizeButton_Click" ToolTip="{DynamicResource LocMinimizeTooltip}">
                             <TextBlock Text="&#xEBD0;" FontFamily="{StaticResource FluentIconFont}" FontSize="18" />
                         </Button>
-                        <Button Style="{StaticResource IconButton}" Command="{Binding RefreshCommand}" ToolTip="刷新数据">
+                        <Button x:Name="RefreshButton" Style="{StaticResource IconButton}" Command="{Binding RefreshCommand}" ToolTip="{DynamicResource LocRefreshTooltip}">
                             <TextBlock Text="&#xF194;" FontFamily="{StaticResource FluentIconFont}" FontSize="18" />
                         </Button>
-                        <Button Style="{StaticResource IconButton}" Command="{Binding ToggleThemeCommand}" ToolTip="{Binding ThemeToolTip}">
-                            <TextBlock Text="{Binding ThemeIcon}" FontFamily="{StaticResource UiFont}" FontSize="18" FontWeight="SemiBold" />
+                        <Button x:Name="SettingsButton" Style="{StaticResource IconButton}" Click="SettingsButton_Click" ToolTip="{DynamicResource LocSettings}">
+                            <TextBlock Text="&#xF6AA;" FontFamily="{StaticResource FluentIconFont}" FontSize="18" />
                         </Button>
                     </StackPanel>
                 </Grid>
 
                 <Border Grid.Row="1" Background="{DynamicResource TabHostBrush}" CornerRadius="16" Padding="3" Margin="22,0,22,12">
                     <UniformGrid Columns="3">
-                        <ToggleButton Content="总览" Style="{StaticResource SegmentedTab}" IsChecked="{Binding IsOverviewVisible, Mode=OneWay}" Command="{Binding ShowOverviewCommand}" />
-                        <ToggleButton Content="模型" Style="{StaticResource SegmentedTab}" IsChecked="{Binding IsModelsVisible, Mode=OneWay}" Command="{Binding ShowModelsCommand}" />
-                        <ToggleButton Content="历史" Style="{StaticResource SegmentedTab}" IsChecked="{Binding IsHistoryVisible, Mode=OneWay}" Command="{Binding ShowHistoryCommand}" />
+                        <ToggleButton Content="{DynamicResource LocOverview}" Style="{StaticResource SegmentedTab}" IsChecked="{Binding IsOverviewVisible, Mode=OneWay}" Command="{Binding ShowOverviewCommand}" />
+                        <ToggleButton Content="{DynamicResource LocModels}" Style="{StaticResource SegmentedTab}" IsChecked="{Binding IsModelsVisible, Mode=OneWay}" Command="{Binding ShowModelsCommand}" />
+                        <ToggleButton Content="{DynamicResource LocHistory}" Style="{StaticResource SegmentedTab}" IsChecked="{Binding IsHistoryVisible, Mode=OneWay}" Command="{Binding ShowHistoryCommand}" />
                     </UniformGrid>
                 </Border>
 
@@ -71,15 +78,21 @@
 
                 <Border Grid.Row="3" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource ChromeBrush}">
                     <Grid Margin="20,8,16,8">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="本地优先" FontSize="11" Foreground="{DynamicResource MutedBrush}" />
-                            <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedBrush}" Margin="7,0" />
-                            <TextBlock Text="每 15 分钟自动刷新" FontSize="11" Foreground="{DynamicResource MutedBrush}" />
-                            <Ellipse Width="3" Height="3" Fill="{DynamicResource MutedBrush}" Margin="7,0" />
-                            <TextBlock Text="价格每次启动校准" FontSize="11" Foreground="{DynamicResource MutedBrush}" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                            <Button Style="{StaticResource PillActionButton}" Command="{Binding OpenDataFolderCommand}" ToolTip="打开数据目录">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="FooterStatusText"
+                                   Grid.Column="0"
+                                   Text="{DynamicResource LocFooterStatus}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource MutedBrush}"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
+                                   Margin="0,0,12,0" />
+                        <StackPanel x:Name="FooterActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource PillActionButton}" Command="{Binding OpenDataFolderCommand}" ToolTip="{DynamicResource LocOpenDataFolder}">
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                     <Grid Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -87,10 +100,10 @@
                                               Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                               StrokeThickness="1.2" StrokeLineJoin="Round" />
                                     </Grid>
-                                    <TextBlock Grid.Column="1" Text="数据" VerticalAlignment="Center" Margin="6,0,0,0" />
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource LocData}" VerticalAlignment="Center" Margin="6,0,0,0" />
                                 </Grid>
                             </Button>
-                            <Button Style="{StaticResource PillActionButton}" Command="{Binding QuitCommand}" ToolTip="退出应用" Margin="8,0,0,0">
+                            <Button Style="{StaticResource PillActionButton}" Command="{Binding QuitCommand}" ToolTip="{DynamicResource LocQuitApplication}" Margin="8,0,0,0">
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                     <Grid Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -101,7 +114,7 @@
                                               Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
                                               StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
                                     </Grid>
-                                    <TextBlock Grid.Column="1" Text="退出" VerticalAlignment="Center" Margin="6,0,0,0" />
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource LocQuit}" VerticalAlignment="Center" Margin="6,0,0,0" />
                                 </Grid>
                             </Button>
                         </StackPanel>
@@ -110,6 +123,152 @@
             </Grid>
 
             <views:ResetCardsView Visibility="{Binding IsResetDetailsVisible, Converter={StaticResource BoolToVisibility}}" />
+
+            <Popup x:Name="SettingsPopup"
+                   PlacementTarget="{Binding ElementName=SettingsButton}"
+                   Placement="Bottom"
+                   VerticalOffset="8"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="False"
+                   Closed="SettingsPopup_Closed">
+                <Border Width="318"
+                        Padding="16"
+                        Background="{DynamicResource CardBrush}"
+                        BorderBrush="{DynamicResource CardHoverBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="16">
+                    <Border.Effect>
+                        <DropShadowEffect Color="#55000000" BlurRadius="24" ShadowDepth="5" Opacity="0.28" />
+                    </Border.Effect>
+                    <StackPanel>
+                        <TextBlock Text="{DynamicResource LocSettings}" FontSize="16" FontWeight="SemiBold" Margin="2,0,0,13" />
+
+                        <TextBlock Text="{DynamicResource LocAppearance}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="2,0,0,5" />
+                        <Border Background="{DynamicResource RangeHostBrush}" CornerRadius="12" Padding="3">
+                            <UniformGrid Columns="2">
+                                <ToggleButton Content="{DynamicResource LocLight}" Style="{StaticResource SettingsChoice}" IsChecked="{Binding IsLightMode, Mode=OneWay}" Command="{Binding SetLightThemeCommand}" />
+                                <ToggleButton Content="{DynamicResource LocDark}" Style="{StaticResource SettingsChoice}" IsChecked="{Binding IsDarkMode, Mode=OneWay}" Command="{Binding SetDarkThemeCommand}" />
+                            </UniformGrid>
+                        </Border>
+
+                        <Grid Margin="2,15,2,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,12,0">
+                                <TextBlock Text="{DynamicResource LocStartup}" FontSize="13" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding StartupStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="10.5" TextWrapping="Wrap" Margin="0,3,0,0" />
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding StartupEnabled}" VerticalAlignment="Center" ToolTip="{DynamicResource LocStartupTooltip}" />
+                        </Grid>
+
+                        <Grid Margin="2,15,2,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,12,0">
+                                <TextBlock Text="{DynamicResource LocAutomaticUpdateChecks}" FontSize="13" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding UpdateCheckStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="10.5" TextWrapping="Wrap" Margin="0,3,0,0" />
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding AutoUpdateCheckEnabled}"
+                                          VerticalAlignment="Top"
+                                          ToolTip="{DynamicResource LocAutomaticUpdateChecksTooltip}" />
+                        </Grid>
+                        <Button Content="{DynamicResource LocCheckForUpdates}"
+                                Style="{StaticResource PillActionButton}"
+                                Command="{Binding CheckForUpdatesCommand}"
+                                HorizontalAlignment="Left"
+                                MinHeight="30"
+                                Padding="11,4"
+                                Margin="2,9,0,0" />
+
+                        <TextBlock Text="{DynamicResource LocLanguage}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="2,15,0,5" />
+                        <Border Background="{DynamicResource RangeHostBrush}" CornerRadius="12" Padding="3">
+                            <UniformGrid Columns="2">
+                                <ToggleButton Content="{DynamicResource LocChinese}" Style="{StaticResource SettingsChoice}" IsChecked="{Binding IsChinese, Mode=OneWay}" Command="{Binding SetChineseLanguageCommand}" />
+                                <ToggleButton Content="{DynamicResource LocEnglish}" Style="{StaticResource SettingsChoice}" IsChecked="{Binding IsEnglish, Mode=OneWay}" Command="{Binding SetEnglishLanguageCommand}" />
+                            </UniformGrid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <Popup x:Name="UpdatePopup"
+                   PlacementTarget="{Binding ElementName=UpdateEntryHost}"
+                   Placement="Bottom"
+                   HorizontalOffset="-278"
+                   VerticalOffset="8"
+                   AllowsTransparency="True"
+                   PopupAnimation="Fade"
+                   StaysOpen="False"
+                   IsOpen="{Binding IsUpdateFlyoutOpen, Mode=TwoWay}"
+                   Opened="UpdatePopup_Opened"
+                   Closed="UpdatePopup_Closed">
+                <Grid Width="308"
+                      FocusManager.IsFocusScope="True"
+                      KeyboardNavigation.TabNavigation="Cycle"
+                      KeyboardNavigation.ControlTabNavigation="Cycle"
+                      PreviewKeyDown="UpdatePopup_PreviewKeyDown">
+                    <Grid.RowDefinitions><RowDefinition Height="8" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                    <Path Grid.Row="0"
+                          Data="M 0,8 L 8,0 L 16,8 Z"
+                          Fill="{DynamicResource CardBrush}"
+                          HorizontalAlignment="Right"
+                          Margin="0,0,14,0" />
+                    <Border Grid.Row="1"
+                            Padding="18,16,18,15"
+                            Background="{DynamicResource CardBrush}"
+                            BorderBrush="{DynamicResource CardHoverBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="15">
+                        <Border.Effect>
+                            <DropShadowEffect Color="#55000000" BlurRadius="24" ShadowDepth="5" Opacity="0.28" />
+                        </Border.Effect>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <TextBlock FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                    <Run Text="{DynamicResource LocAppTitle}" /><Run Text=" " /><Run Text="{Binding LatestVersionText, Mode=OneWay}" />
+                                </TextBlock>
+                                <Button x:Name="CloseUpdateButton"
+                                        Grid.Column="1"
+                                        Style="{StaticResource IconButton}"
+                                        Width="28"
+                                        Height="28"
+                                        Command="{Binding CloseUpdateFlyoutCommand}"
+                                        ToolTip="{DynamicResource LocClose}">
+                                    <TextBlock Text="×" FontFamily="{StaticResource UiFont}" FontSize="20" />
+                                </Button>
+                            </Grid>
+                            <TextBlock Grid.Row="1"
+                                       Text="{DynamicResource LocNewVersionPublished}"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       FontSize="12.5"
+                                       Margin="0,5,0,16" />
+                            <Button x:Name="ViewUpdateButton"
+                                    Grid.Row="2"
+                                    Content="{DynamicResource LocViewUpdate}"
+                                    Style="{StaticResource UpdatePrimaryButton}"
+                                    Command="{Binding ViewUpdateCommand}" />
+                            <Button x:Name="RemindLaterButton"
+                                    Grid.Row="3"
+                                    Content="{DynamicResource LocRemindLater}"
+                                    Style="{StaticResource CompactActionButton}"
+                                    Foreground="{DynamicResource BlueBrush}"
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    HorizontalAlignment="Center"
+                                    Command="{Binding SnoozeUpdateCommand}"
+                                    Margin="0,8,0,0" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Popup>
         </Grid>
     </Border>
 </Window>

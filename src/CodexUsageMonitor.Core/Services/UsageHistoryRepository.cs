@@ -16,10 +16,18 @@ public sealed record StoredQuotaSnapshot(
     AccountSnapshot? Account,
     QuotaSnapshot Quota,
     DateTimeOffset? AccountCapturedAt,
-    DateTimeOffset? GeneralCapturedAt,
+    DateTimeOffset? GeneralFiveHourCapturedAt,
+    DateTimeOffset? GeneralWeeklyCapturedAt,
     DateTimeOffset? SparkCapturedAt,
     DateTimeOffset? ResetCreditsCapturedAt)
 {
+    public DateTimeOffset? GeneralCapturedAt
+        => GeneralFiveHourCapturedAt.HasValue && GeneralWeeklyCapturedAt.HasValue
+            ? (GeneralFiveHourCapturedAt.Value > GeneralWeeklyCapturedAt.Value
+                ? GeneralFiveHourCapturedAt
+                : GeneralWeeklyCapturedAt)
+            : GeneralFiveHourCapturedAt ?? GeneralWeeklyCapturedAt;
+
     public DateTimeOffset? CapturedAt
     {
         get
@@ -103,6 +111,8 @@ public sealed class UsageHistoryRepository(string databasePath)
                 plan_type TEXT,
                 account_captured_at TEXT,
                 general_captured_at TEXT,
+                general_five_hour_captured_at TEXT,
+                general_weekly_captured_at TEXT,
                 spark_captured_at TEXT,
                 reset_credits_captured_at TEXT,
                 payload_json TEXT NOT NULL
@@ -155,6 +165,8 @@ public sealed class UsageHistoryRepository(string databasePath)
         await EnsureColumnAsync(connection, "usage_sources", "file_identity", "TEXT", cancellationToken);
         await EnsureColumnAsync(connection, "quota_snapshots", "account_captured_at", "TEXT", cancellationToken);
         await EnsureColumnAsync(connection, "quota_snapshots", "general_captured_at", "TEXT", cancellationToken);
+        await EnsureColumnAsync(connection, "quota_snapshots", "general_five_hour_captured_at", "TEXT", cancellationToken);
+        await EnsureColumnAsync(connection, "quota_snapshots", "general_weekly_captured_at", "TEXT", cancellationToken);
         await EnsureColumnAsync(connection, "quota_snapshots", "spark_captured_at", "TEXT", cancellationToken);
         await EnsureColumnAsync(connection, "quota_snapshots", "reset_credits_captured_at", "TEXT", cancellationToken);
 
@@ -390,7 +402,8 @@ public sealed class UsageHistoryRepository(string databasePath)
             quota,
             capturedAt,
             account is null ? null : capturedAt,
-            quota.General is null ? null : capturedAt,
+            quota.General?.FiveHour is null ? null : capturedAt,
+            quota.General?.Weekly is null ? null : capturedAt,
             quota.Spark is null ? null : capturedAt,
             quota.ResetCreditCount.HasValue || quota.ResetCredits.Count > 0 ? capturedAt : null,
             quota,
@@ -401,7 +414,8 @@ public sealed class UsageHistoryRepository(string databasePath)
         QuotaSnapshot quota,
         DateTimeOffset capturedAt,
         DateTimeOffset? accountCapturedAt,
-        DateTimeOffset? generalCapturedAt,
+        DateTimeOffset? generalFiveHourCapturedAt,
+        DateTimeOffset? generalWeeklyCapturedAt,
         DateTimeOffset? sparkCapturedAt,
         DateTimeOffset? resetCreditsCapturedAt,
         QuotaSnapshot? resetObservation,
@@ -415,13 +429,21 @@ public sealed class UsageHistoryRepository(string databasePath)
         quotaCommand.CommandText = """
             INSERT OR REPLACE INTO quota_snapshots (
                 captured_at, plan_type, account_captured_at, general_captured_at,
+                general_five_hour_captured_at, general_weekly_captured_at,
                 spark_captured_at, reset_credits_captured_at, payload_json)
-            VALUES ($at, $plan, $accountAt, $generalAt, $sparkAt, $resetAt, $json)
+            VALUES ($at, $plan, $accountAt, $generalAt, $generalFiveHourAt, $generalWeeklyAt, $sparkAt, $resetAt, $json)
             """;
         quotaCommand.Parameters.AddWithValue("$at", capturedAt.ToUniversalTime().ToString("O"));
         quotaCommand.Parameters.AddWithValue("$plan", (object?)account?.PlanType ?? DBNull.Value);
         quotaCommand.Parameters.AddWithValue("$accountAt", ToDatabaseValue(accountCapturedAt));
+        var generalCapturedAt = generalFiveHourCapturedAt.HasValue && generalWeeklyCapturedAt.HasValue
+            ? (generalFiveHourCapturedAt.Value > generalWeeklyCapturedAt.Value
+                ? generalFiveHourCapturedAt
+                : generalWeeklyCapturedAt)
+            : generalFiveHourCapturedAt ?? generalWeeklyCapturedAt;
         quotaCommand.Parameters.AddWithValue("$generalAt", ToDatabaseValue(generalCapturedAt));
+        quotaCommand.Parameters.AddWithValue("$generalFiveHourAt", ToDatabaseValue(generalFiveHourCapturedAt));
+        quotaCommand.Parameters.AddWithValue("$generalWeeklyAt", ToDatabaseValue(generalWeeklyCapturedAt));
         quotaCommand.Parameters.AddWithValue("$sparkAt", ToDatabaseValue(sparkCapturedAt));
         quotaCommand.Parameters.AddWithValue("$resetAt", ToDatabaseValue(resetCreditsCapturedAt));
         quotaCommand.Parameters.AddWithValue("$json", JsonSerializer.Serialize(quota));
@@ -441,6 +463,7 @@ public sealed class UsageHistoryRepository(string databasePath)
         var command = connection.CreateCommand();
         command.CommandText = """
             SELECT captured_at, plan_type, account_captured_at, general_captured_at,
+                   general_five_hour_captured_at, general_weekly_captured_at,
                    spark_captured_at, reset_credits_captured_at, payload_json
             FROM quota_snapshots ORDER BY captured_at DESC LIMIT 1
             """;
@@ -454,16 +477,18 @@ public sealed class UsageHistoryRepository(string databasePath)
         {
             var capturedAt = DateTimeOffset.Parse(reader.GetString(0));
             var planType = reader.IsDBNull(1) ? null : reader.GetString(1);
-            var quota = JsonSerializer.Deserialize<QuotaSnapshot>(reader.GetString(6));
+            var quota = JsonSerializer.Deserialize<QuotaSnapshot>(reader.GetString(8));
+            var legacyGeneralCapturedAt = ReadCapturedAt(reader, 3);
             return quota is null
                 ? null
                 : new StoredQuotaSnapshot(
                     string.IsNullOrWhiteSpace(planType) ? null : new AccountSnapshot("chatgpt", planType),
                     quota,
                     ReadCapturedAt(reader, 2) ?? (string.IsNullOrWhiteSpace(planType) ? null : capturedAt),
-                    ReadCapturedAt(reader, 3) ?? (quota.General is null ? null : capturedAt),
-                    ReadCapturedAt(reader, 4) ?? (quota.Spark is null ? null : capturedAt),
-                    ReadCapturedAt(reader, 5) ?? (quota.ResetCreditCount.HasValue || quota.ResetCredits.Count > 0 ? capturedAt : null));
+                    ReadCapturedAt(reader, 4) ?? (quota.General?.FiveHour is null ? null : legacyGeneralCapturedAt ?? capturedAt),
+                    ReadCapturedAt(reader, 5) ?? (quota.General?.Weekly is null ? null : legacyGeneralCapturedAt ?? capturedAt),
+                    ReadCapturedAt(reader, 6) ?? (quota.Spark is null ? null : capturedAt),
+                    ReadCapturedAt(reader, 7) ?? (quota.ResetCreditCount.HasValue || quota.ResetCredits.Count > 0 ? capturedAt : null));
         }
         catch (Exception exception) when (exception is JsonException or FormatException)
         {
@@ -638,6 +663,25 @@ public sealed class UsageHistoryRepository(string databasePath)
         command.CommandText = "INSERT OR REPLACE INTO app_settings (key, value) VALUES ($key, $value)";
         command.Parameters.AddWithValue("$key", key);
         command.Parameters.AddWithValue("$value", value.ToString());
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<string?> GetStringSettingAsync(string key, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        var command = connection.CreateCommand();
+        command.CommandText = "SELECT value FROM app_settings WHERE key = $key";
+        command.Parameters.AddWithValue("$key", key);
+        return await command.ExecuteScalarAsync(cancellationToken) as string;
+    }
+
+    public async Task SetStringSettingAsync(string key, string value, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        var command = connection.CreateCommand();
+        command.CommandText = "INSERT OR REPLACE INTO app_settings (key, value) VALUES ($key, $value)";
+        command.Parameters.AddWithValue("$key", key);
+        command.Parameters.AddWithValue("$value", value);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 

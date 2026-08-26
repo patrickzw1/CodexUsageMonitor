@@ -8,7 +8,7 @@ This project is released under the [MIT License](LICENSE). You may use, modify, 
 
 ## Features
 
-- General weekly quota, reset time, and consumption pace forecast based on an even seven-day allocation.
+- General weekly quota, reset time, and consumption pace forecast based on an even seven-day allocation. When the server returns a valid five-hour window, the overview automatically shows the general five-hour quota at the top; otherwise that row is hidden.
 - Separate five-hour and weekly Spark limits. They are shown only for Pro or higher plans and only when the server returns a Spark quota.
 - Per-model Token usage, cache hit rate, and API-equivalent cost. Estimated costs use the “≈” prefix and show public price coverage; the app does not invent prices for internal models without published pricing.
 - Model page with real time filters for Today, 7 Days, and 30 Days, ranking bars, and a usage donut chart.
@@ -17,8 +17,8 @@ This project is released under the [MIT License](LICENSE). You may use, modify, 
 - Local SQLite history for daily usage in the current month, model summaries, and reset-card history. When the app starts offline or the official daily-usage method temporarily fails, it shows the most recent successful history and its timestamp.
 - Reset-card details including available count, grant time, validity period, nearest expiration time, and locally observed grant/use/expiration events.
 - Windows tray notifications 7, 3, and 1 day before expiration. Each expiration threshold is notified at most once per app run.
-- Light and dark themes switched with the moon/sun icon in the title bar. The preference is stored locally and restored on the next launch.
-- An explicit “Start automatically with Windows (run in background)” switch on the History page. It is off by default and requires no administrator privileges.
+- A title-bar Settings popover switches light/dark appearance and Chinese/English, and provides an explicit “Start with Windows (in background)” switch. Preferences are stored locally and restored on the next launch; startup remains off by default and requires no administrator privileges.
+- By default, the app anonymously checks this repository's latest stable GitHub Release at most once every 24 hours. When a newer version exists, the title bar offers a reminder that can be snoozed for 24 hours or used to open the official Release page. It never downloads, executes, or replaces the app automatically. Automatic checks can be disabled in Settings, while a manual check bypasses the 24-hour interval.
 - Automatic refresh every 15 minutes. Global backoff of 15 / 30 / 60 / 120 minutes applies only when the app-server process fails or all three account methods fail; a single-method failure falls back to historical data only for the affected partition. Manual refresh has a two-minute cooldown.
 - If the server reports available reset cards but omits individual card details, one refresh may retry the detail query up to two times. These remain read-only queries and do not invoke a model or consume Tokens.
 
@@ -31,25 +31,36 @@ This project is released under the [MIT License](LICENSE). You may use, modify, 
 - Local database and pricing snapshot: `%LOCALAPPDATA%\CodexUsageMonitor`.
 - SQLite stores hashed rollout source identifiers and parsing checkpoints (which may include a local session ID), plus quota, reset-card, and daily-usage metadata. It does not store prompts or conversation bodies. This version retains those statistics indefinitely by default and has no automatic retention policy or in-app delete button. To clear them, exit the app first, then delete `usage.db`, `usage.db-wal`, and `usage.db-shm` from that directory.
 - Apart from retrieving OpenAI's official pricing pages at startup, the app does not upload local conversation content.
+- Update checks access only `https://api.github.com/repos/patrickzw1/CodexUsageMonitor/releases/latest`. Requests contain no GitHub Token and send no Codex usage, account data, prompts, conversation bodies, local paths, or device identifiers. “View update” opens only a validated GitHub Release page under this repository.
 - Refresh performs only local file scanning and account/quota reads. It does not create model inference requests or consume model Tokens, although it does generate a small number of authenticated metadata reads through Codex.
 - Reset-card reminders use only the `expiresAt` value returned by the server. If the server returns only a count or grant time, the app does not infer an expiration date and temporarily disables the reminder switch.
 
-> `account/read`, `account/rateLimits/read`, and `account/usage/read` are mutable protocol dependencies of the local Codex app-server, not stable public APIs guaranteed by this project. Weekly quota, Spark, reset cards, summary, and daily usage are each checked for completeness. If a method is unavailable, an array is empty, fields change, or the process cannot start, only the affected partition is marked unavailable or falls back to the last successful value with its timestamp. Local rollout Token and cost refresh continues.
+> `account/read`, `account/rateLimits/read`, and `account/usage/read` are mutable protocol dependencies of the local Codex app-server, not stable public APIs guaranteed by this project. General five-hour/weekly quota, Spark, reset cards, summary, and daily usage are evaluated from the fields returned by the server. If a method is unavailable, an array is empty, fields change, or the process cannot start, only the affected partition is marked unavailable or falls back to the last successful value with its timestamp. Local rollout Token and cost refresh continues.
 
 Security boundary: the app never executes an arbitrary same-named program from `PATH`. `CODEX_USAGE_MONITOR_CODEX_PATH` accepts only an absolute local path; default candidates are restricted to Codex installation/local-copy directories and must pass OpenAI publisher-signature validation. A single app-server stdout JSON frame is limited to 1 MiB of characters, stderr retains at most 64 KiB, each of the six official pricing responses is limited to 2 MiB, and each rollout line is limited to 1 MiB and persisted in batches.
 
 ## Downloads and verification
 
-After the first version tag is published, regular users can download the versioned Windows portable ZIP and `SHA256SUMS.txt` from the [latest GitHub Release](https://github.com/patrickzw1/CodexUsageMonitor/releases/latest). If Releases is still empty, the project has not yet published a directly downloadable build.
+Regular users can download the versioned Windows portable ZIP and `SHA256SUMS.txt` from the [latest GitHub Release](https://github.com/patrickzw1/CodexUsageMonitor/releases/latest).
 
-After downloading, compare the SHA-256 values in the download directory (using `0.1.0` as an example):
+After downloading, compare the SHA-256 values in the download directory (using `0.2.0` as an example):
 
 ```powershell
-Get-FileHash .\CodexUsageMonitor-0.1.0-win-x64.zip -Algorithm SHA256
+Get-FileHash .\CodexUsageMonitor-0.2.0-win-x64.zip -Algorithm SHA256
 Get-Content .\SHA256SUMS.txt
 ```
 
 The two hashes must match. GitHub's automatically generated **Source code (zip/tar.gz)** archives are source snapshots, not directly runnable software. Regular users should download the portable ZIP generated by this project under Release assets.
+
+## Versioning policy
+
+The project uses semantic versioning. Git tags use `vX.Y.Z`; the version passed to the build script omits the `v` prefix:
+
+- `0.Y.0`: feature releases before 1.0. Increment `Y` for user-visible features, pages, or substantial data capabilities.
+- `0.Y.Z`: patch releases within a feature line. Increment `Z` for bug, security, performance, documentation, or packaging fixes only.
+- `1.0.0`: the product, data format, and release process are stable for long-term use.
+- `X.0.0` (`X >= 2`): incompatible changes to settings, data formats, or core behavior.
+- Prereleases use tags such as `v0.3.0-beta.1` and do not replace the stable Release for that version.
 
 ## Development and running from source
 
@@ -61,9 +72,9 @@ dotnet build src\CodexUsageMonitor\CodexUsageMonitor.csproj -c Release -r win-x6
 dotnet run --project src\CodexUsageMonitor\CodexUsageMonitor.csproj -c Release --no-restore -- --show
 ```
 
-Double-clicking the app shows the window immediately. Starting it again activates the existing window instead of creating another tray instance. Clicking outside hides the window to the tray, empty title-bar space can drag it, and the minus button hides it manually. Left-click the tray icon to reopen it; right-click for the glass-style menu with Open, Refresh, Data Directory, and Quit actions. Use `--hidden` for silent startup, or `--page=models`, `--page=reset`, and `--page=history` to open a specific page.
+Double-clicking the app shows the window immediately. Starting it again activates the existing window instead of creating another tray instance. Clicking outside hides the window to the tray, empty title-bar space can drag it, and the minus button hides it manually. The gear opens a Settings popover over the content without moving the Overview / Models / History tabs. Left-click the tray icon to reopen it; right-click for the glass-style menu with Open, Refresh, Data Directory, and Quit actions. Use `--hidden` for silent startup, or `--page=models`, `--page=reset`, and `--page=history` to open a specific page.
 
-Startup with Windows is off by default. When enabled on the History page, the app writes only its own value named `CodexUsageMonitor` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. The value contains the quoted absolute path of the current EXE followed by `--hidden`. It does not use `cmd.exe`, PowerShell, Task Scheduler, or administrator privileges, and it does not read, overwrite, or delete other applications' startup values. Disabling the switch removes only this value. If the app is moved while the switch remains enabled, the next run updates its own value to the current location. If the UI cannot disable it, exit the app and run:
+Startup with Windows is off by default. When enabled from the title-bar Settings popover, the app writes only its own value named `CodexUsageMonitor` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. The value contains the quoted absolute path of the current EXE followed by `--hidden`. It does not use `cmd.exe`, PowerShell, Task Scheduler, or administrator privileges, and it does not read, overwrite, or delete other applications' startup values. Disabling the switch removes only this value. If the app is moved while the switch remains enabled, the next run updates its own value to the current location. If the UI cannot disable it, exit the app and run:
 
 ```powershell
 reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v CodexUsageMonitor /f
@@ -74,19 +85,19 @@ Windows 11 uses system Desktop Acrylic and native rounded corners. Unsupported s
 ## Portable release
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Version 0.1.0
+powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 -Version 0.2.0
 ```
 
 Formal packaging rejects a dirty working tree. For local validation during development, pass `-Preview` explicitly and use a temporary output directory so an existing `dist` is not overwritten:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 `
-  -Version 0.1.0 -Preview -OutputRoot "$env:TEMP\CodexUsageMonitor-preview"
+  -Version 0.2.0 -Preview -OutputRoot "$env:TEMP\CodexUsageMonitor-preview"
 ```
 
 The target computer does not need Python or a separately installed .NET Runtime. Extract the versioned ZIP and run `CodexUsageMonitor.exe`. Codex must already be installed and signed in on that computer; the app reads that computer's own local history.
 
-The release script strictly performs locked restore → self-contained multi-file publish → optional Authenticode signing → signature verification → documentation/licenses/runtime SBOM → ZIP → SHA-256. The ZIP contains the complete EXE, DLLs, `.deps.json`, `.runtimeconfig.json`, and native runtime files. The script compares every file across publish output, staging, and ZIP and verifies that README, the project's MIT LICENSE, third-party notices, `licenses/`, release metadata, and CycloneDX SBOM all describe the same version. The SBOM covers only the shipped application, runtime dependencies, and embedded font.
+The public release script strictly performs locked restore → self-contained multi-file publish → optional Authenticode signing → signature verification → documentation/licenses/runtime SBOM → ZIP → SHA-256. The ZIP contains the complete EXE, DLLs, `.deps.json`, `.runtimeconfig.json`, and native runtime files. The script compares every file across publish output, staging, and ZIP and verifies that README, the project's MIT LICENSE, third-party notices, `licenses/`, release metadata, and CycloneDX SBOM all describe the same version. Full regression tests remain in the private development worktree and run before public source synchronization; neither the public repository nor the release package contains test source or test dependencies.
 
 If you have a signing certificate, pass absolute `-SignToolPath` and `-CertificateThumbprint` values. Signing happens before compression and final hashing. Without a certificate, the script explicitly reports `NotSigned` and never fabricates a signature.
 
