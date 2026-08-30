@@ -186,15 +186,18 @@ public sealed class DashboardService : IDashboardService, IUpdateCheckSettingsSt
                 completeness.UsageSummary,
                 completeness.DailyUsage,
                 cancellationToken);
+            storedUsage = await _repository.GetLatestOfficialUsageAsync(cancellationToken);
         }
 
         var currentUsage = appServer.Usage;
         var summarySource = completeness.UsageSummary
             ? currentUsage
             : storedUsage?.Usage ?? currentUsage;
-        var dailySource = completeness.DailyUsage
-            ? currentUsage
-            : storedUsage?.Usage ?? currentUsage;
+        // 官方按日历史在保存后统一读取；部分响应只修正返回日期，不丢弃其他官方历史。
+        var currentDays = completeness.DailyUsage
+            ? (currentUsage?.DailyUsage ?? []).Select(day => day.Date).ToHashSet()
+            : [];
+        var dailySource = storedUsage?.Usage ?? currentUsage;
         var officialUsage = summarySource is null && dailySource is null
             ? null
             : new OfficialUsageSnapshot(
@@ -202,11 +205,11 @@ public sealed class DashboardService : IDashboardService, IUpdateCheckSettingsSt
                 summarySource?.PeakDailyTokens,
                 summarySource?.CurrentStreakDays,
                 summarySource?.LongestStreakDays,
-                dailySource?.DailyUsage ?? []);
+                (dailySource?.DailyUsage ?? []).Select(day => day with { IsCached = !currentDays.Contains(day.Date) }).ToArray());
         var summaryUpdatedAt = completeness.UsageSummary ? appServer.CapturedAt : storedUsage?.SummaryCapturedAt;
         var dailyUpdatedAt = completeness.DailyUsage ? appServer.CapturedAt : storedUsage?.DailyUsageCapturedAt;
         var summaryStale = !completeness.UsageSummary && storedUsage?.SummaryCapturedAt is not null;
-        var dailyStale = !completeness.DailyUsage && storedUsage?.DailyUsageCapturedAt is not null;
+        var dailyStale = officialUsage?.DailyUsage.Any(day => day.IsCached) == true;
         AddPartitionWarning(warnings, "官方汇总", summaryStale, summaryUpdatedAt);
         AddPartitionWarning(warnings, "官方每日用量", dailyStale, dailyUpdatedAt);
 

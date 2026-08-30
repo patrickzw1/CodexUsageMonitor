@@ -11,25 +11,23 @@ namespace CodexUsageMonitor;
 
 public partial class MainWindow : System.Windows.Window
 {
-    private readonly bool _keepOpen;
     private WpfButton? _settingsAnchor;
     private bool _returnFocusToUpdateEntry;
 
-    public MainWindow(MainViewModel viewModel, bool keepOpen = false)
+    public MainWindow(MainViewModel viewModel)
     {
         InitializeComponent();
         DataContext = viewModel;
-        _keepOpen = keepOpen;
         SourceInitialized += (_, _) => WindowBackdrop.Apply(this, ThemeManager.IsDarkMode);
-        Deactivated += (_, _) =>
-        {
-            SettingsPopup.IsOpen = false;
-            UpdatePopup.IsOpen = false;
-            if (!_keepOpen)
-            {
-                Hide();
-            }
-        };
+        Deactivated += (_, _) => HandleDeactivated();
+        Loaded += (_, _) => UpdateUpdateEntryExpansion();
+    }
+
+    private void HandleDeactivated()
+    {
+        SettingsPopup.IsOpen = false;
+        UpdatePopup.IsOpen = false;
+        Hide();
     }
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -81,24 +79,36 @@ public partial class MainWindow : System.Windows.Window
 
         var returnFocus = _returnFocusToUpdateEntry;
         _returnFocusToUpdateEntry = false;
+        var focusScope = FocusManager.GetFocusScope(UpdateButton);
+        var retainedFocus = UpdateButton.IsKeyboardFocusWithin
+                            || ReferenceEquals(FocusManager.GetFocusedElement(focusScope), UpdateButton);
+        UiState.SetSuppressFocusedExpansion(UpdateButton, !returnFocus && retainedFocus);
         if (returnFocus && UpdateButton.IsVisible && UpdateButton.IsEnabled)
         {
+            UiState.SetIsExpanded(UpdateButton, true);
             Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
             {
                 FocusManager.SetFocusedElement(FocusManager.GetFocusScope(UpdateButton), UpdateButton);
                 Keyboard.Focus(UpdateButton);
+                UpdateUpdateEntryExpansion();
             });
+            return;
         }
+
+        UpdateUpdateEntryExpansion();
     }
 
     private void UpdatePopup_Opened(object? sender, EventArgs e)
     {
+        _returnFocusToUpdateEntry = false;
+        UiState.SetSuppressFocusedExpansion(UpdateButton, false);
+        UpdateUpdateEntryExpansion();
         Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
         {
             if (UpdatePopup.IsOpen)
             {
-                FocusManager.SetFocusedElement(FocusManager.GetFocusScope(ViewUpdateButton), ViewUpdateButton);
-                ViewUpdateButton.Focus();
+                FocusManager.SetFocusedElement(FocusManager.GetFocusScope(UpdateActionButton), UpdateActionButton);
+                UpdateActionButton.Focus();
             }
         });
     }
@@ -115,6 +125,20 @@ public partial class MainWindow : System.Windows.Window
 
     private void UpdatePopupActionButton_Click(object sender, RoutedEventArgs e)
         => _returnFocusToUpdateEntry = true;
+
+    private void UpdateButton_ExpansionStateChanged(object sender, RoutedEventArgs e)
+        => UpdateUpdateEntryExpansion();
+
+    private void UpdateUpdateEntryExpansion()
+    {
+        var focusScope = FocusManager.GetFocusScope(UpdateButton);
+        var hasFocus = UpdateButton.IsKeyboardFocusWithin
+                       || ReferenceEquals(FocusManager.GetFocusedElement(focusScope), UpdateButton);
+        var expand = UpdatePopup.IsOpen
+                     || UpdateButton.IsMouseOver
+                     || (hasFocus && !UiState.GetSuppressFocusedExpansion(UpdateButton));
+        UiState.SetIsExpanded(UpdateButton, expand);
+    }
 
     public bool AllowClose { get; set; }
 
@@ -140,6 +164,12 @@ public partial class MainWindow : System.Windows.Window
 
     protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
     {
+        if (e.Key == System.Windows.Input.Key.Tab && UiState.GetSuppressFocusedExpansion(UpdateButton))
+        {
+            UiState.SetSuppressFocusedExpansion(UpdateButton, false);
+            UpdateUpdateEntryExpansion();
+        }
+
         if (e.Key == System.Windows.Input.Key.Escape)
         {
             if (UpdatePopup.IsOpen)

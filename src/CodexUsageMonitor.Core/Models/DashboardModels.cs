@@ -35,7 +35,11 @@ public sealed record QuotaSnapshot(
     bool ResetCreditDetailsComplete,
     IReadOnlyList<ResetCreditSnapshot> ResetCredits);
 
-public sealed record DailyUsagePoint(DateOnly Date, long Tokens);
+public sealed record DailyUsagePoint(DateOnly Date, long Tokens)
+{
+    public DateTimeOffset? CapturedAt { get; init; }
+    public bool IsCached { get; init; }
+}
 
 public sealed record OfficialUsageSnapshot(
     long? LifetimeTokens,
@@ -176,10 +180,10 @@ public sealed record DashboardSnapshot(
     OfficialUsageSnapshot? OfficialUsage,
     DateTimeOffset? OfficialUsageUpdatedAt,
     bool IsOfficialUsageStale,
-    UsageAggregation Usage,
-    UsageAggregation TodayUsage,
-    UsageAggregation SevenDayUsage,
-    UsageAggregation ThirtyDayUsage,
+    UsageAggregation LocalMonthUsage,
+    UsageAggregation LocalTodayUsage,
+    UsageAggregation LocalSevenDayUsage,
+    UsageAggregation LocalThirtyDayUsage,
     PricingSnapshot Pricing,
     IReadOnlyList<ResetHistoryItem> ResetHistory,
     WeeklyPace WeeklyPace,

@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:CodexUsageMonitor.Views"
+        xmlns:ui="clr-namespace:CodexUsageMonitor"
         Title="{DynamicResource LocAppTitle}"
         Icon="Assets/AppIcon.ico"
         Width="536"
@@ -43,12 +44,21 @@
                     <StackPanel x:Name="HeaderActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse x:Name="SyncStatusDot" Width="7" Height="7" Fill="{Binding SyncStatusBrush}" Margin="0,0,6,0" />
                         <TextBlock x:Name="SyncStatusText" Text="{Binding SyncText}" Foreground="{DynamicResource MutedBrush}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0" />
-                        <Grid x:Name="UpdateEntryHost" Width="30" Height="30" Margin="2,0,4,0" Panel.ZIndex="20">
+                        <Grid x:Name="UpdateEntryHost"
+                              Width="88"
+                              Height="30"
+                              Margin="2,0,4,0"
+                              Panel.ZIndex="20"
+                              Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVisibility}}">
                             <Button x:Name="UpdateButton"
                                     Style="{StaticResource UpdateEntryButton}"
-                                    Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVisibility}}"
                                     Command="{Binding ToggleUpdateFlyoutCommand}"
-                                    AutomationProperties.Name="{DynamicResource LocUpdateAvailable}" />
+                                    ui:UiState.IsOpen="{Binding IsUpdateFlyoutOpen}"
+                                    MouseEnter="UpdateButton_ExpansionStateChanged"
+                                    MouseLeave="UpdateButton_ExpansionStateChanged"
+                                    GotKeyboardFocus="UpdateButton_ExpansionStateChanged"
+                                    LostKeyboardFocus="UpdateButton_ExpansionStateChanged"
+                                    AutomationProperties.Name="{DynamicResource LocUpdateNow}" />
                         </Grid>
                         <Button x:Name="MinimizeButton" Style="{StaticResource IconButton}" Click="MinimizeButton_Click" ToolTip="{DynamicResource LocMinimizeTooltip}">
                             <TextBlock Text="&#xEBD0;" FontFamily="{StaticResource FluentIconFont}" FontSize="18" />
@@ -92,6 +102,13 @@
                                    TextWrapping="NoWrap"
                                    Margin="0,0,12,0" />
                         <StackPanel x:Name="FooterActions" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="CurrentVersionText"
+                                       Text="{Binding AppVersionText}"
+                                       Foreground="{DynamicResource MutedBrush}"
+                                       FontSize="10.5"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,10,0"
+                                       ToolTip="{DynamicResource LocCurrentVersion}" />
                             <Button Style="{StaticResource PillActionButton}" Command="{Binding OpenDataFolderCommand}" ToolTip="{DynamicResource LocOpenDataFolder}">
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
@@ -133,14 +150,9 @@
                    StaysOpen="False"
                    Closed="SettingsPopup_Closed">
                 <Border Width="318"
+                        Style="{StaticResource FlyoutPanel}"
                         Padding="16"
-                        Background="{DynamicResource SettingsPanelBrush}"
-                        BorderBrush="{DynamicResource CardHoverBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="16">
-                    <Border.Effect>
-                        <DropShadowEffect Color="#55000000" BlurRadius="24" ShadowDepth="5" Opacity="0.28" />
-                    </Border.Effect>
+                        AutomationProperties.Name="{DynamicResource LocSettings}">
                     <StackPanel>
                         <TextBlock Text="{DynamicResource LocSettings}" FontSize="16" FontWeight="SemiBold" Margin="2,0,0,13" />
 
@@ -195,7 +207,7 @@
             <Popup x:Name="UpdatePopup"
                    PlacementTarget="{Binding ElementName=UpdateEntryHost}"
                    Placement="Bottom"
-                   HorizontalOffset="-278"
+                   HorizontalOffset="-220"
                    VerticalOffset="8"
                    AllowsTransparency="True"
                    PopupAnimation="Fade"
@@ -210,19 +222,13 @@
                       PreviewKeyDown="UpdatePopup_PreviewKeyDown">
                     <Grid.RowDefinitions><RowDefinition Height="8" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                     <Path Grid.Row="0"
+                          Style="{StaticResource FlyoutArrow}"
                           Data="M 0,8 L 8,0 L 16,8 Z"
-                          Fill="{DynamicResource CardBrush}"
                           HorizontalAlignment="Right"
                           Margin="0,0,14,0" />
                     <Border Grid.Row="1"
-                            Padding="18,16,18,15"
-                            Background="{DynamicResource CardBrush}"
-                            BorderBrush="{DynamicResource CardHoverBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="15">
-                        <Border.Effect>
-                            <DropShadowEffect Color="#55000000" BlurRadius="24" ShadowDepth="5" Opacity="0.28" />
-                        </Border.Effect>
+                            Style="{StaticResource FlyoutPanel}"
+                            Padding="18,16,18,15">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -241,33 +247,29 @@
                                         Style="{StaticResource IconButton}"
                                         Width="28"
                                         Height="28"
-                                        Click="UpdatePopupActionButton_Click"
                                         Command="{Binding CloseUpdateFlyoutCommand}"
                                         ToolTip="{DynamicResource LocClose}">
                                     <TextBlock Text="×" FontFamily="{StaticResource UiFont}" FontSize="20" />
                                 </Button>
                             </Grid>
                             <TextBlock Grid.Row="1"
-                                       Text="{DynamicResource LocNewVersionPublished}"
+                                       Text="{Binding UpdateFlyoutMessage}"
                                        Foreground="{DynamicResource MutedBrush}"
                                        FontSize="12.5"
+                                       TextWrapping="Wrap"
                                        Margin="0,5,0,16" />
-                            <Button x:Name="ViewUpdateButton"
-                                    Grid.Row="2"
-                                    TabIndex="0"
-                                    Content="{DynamicResource LocViewUpdate}"
-                                    Style="{StaticResource UpdatePrimaryButton}"
+                            <Button x:Name="UpdateActionButton"
+                                     Grid.Row="2"
+                                     TabIndex="0"
+                                     Content="{Binding UpdateActionText}"
+                                     Style="{StaticResource UpdatePrimaryButton}"
                                     Click="UpdatePopupActionButton_Click"
-                                    Command="{Binding ViewUpdateCommand}" />
+                                    Command="{Binding UpdateActionCommand}" />
                             <Button x:Name="RemindLaterButton"
                                     Grid.Row="3"
                                     TabIndex="1"
-                                    Content="{DynamicResource LocRemindLater}"
-                                    Style="{StaticResource CompactActionButton}"
-                                    Foreground="{DynamicResource BlueBrush}"
-                                    FontSize="13"
-                                    FontWeight="SemiBold"
-                                    HorizontalAlignment="Center"
+                                    Content="{Binding UpdateSecondaryActionText}"
+                                    Style="{StaticResource UpdateSecondaryButton}"
                                     Command="{Binding SnoozeUpdateCommand}"
                                     Margin="0,8,0,0" />
                         </Grid>

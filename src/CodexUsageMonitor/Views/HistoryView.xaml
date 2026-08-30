@@ -5,33 +5,21 @@
         <StackPanel Margin="22,4,22,22">
             <StackPanel Margin="2,0,2,12">
                 <TextBlock Text="{DynamicResource LocHistoryTrends}" FontSize="20" FontWeight="SemiBold" />
-                <TextBlock Text="{DynamicResource LocHistoryDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,3,0,0" />
+                <TextBlock Text="{DynamicResource LocHistoryDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0" />
             </StackPanel>
 
             <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
-                <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="1" /><ColumnDefinition Width="*" /><ColumnDefinition Width="1" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock Text="{DynamicResource LocMonthlyTokens}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
-                        <TextBlock Text="{Binding MonthTokens}" FontSize="24" FontWeight="SemiBold" Margin="0,4,0,0" />
-                    </StackPanel>
-                    <Border Grid.Column="1" Background="{DynamicResource LineBrush}" />
-                    <StackPanel Grid.Column="2" Margin="12,0">
-                        <TextBlock Text="{DynamicResource LocApiEquivalentCost}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
-                        <TextBlock Text="{Binding MonthCost}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" Margin="0,4,0,0" />
-                    </StackPanel>
-                    <Border Grid.Column="3" Background="{DynamicResource LineBrush}" />
-                    <StackPanel Grid.Column="4" Margin="18,0,0,0">
-                        <TextBlock Text="{DynamicResource LocCacheHit}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
-                        <TextBlock Text="{Binding CacheHit}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource GreenBrush}" Margin="0,4,0,0" />
-                    </StackPanel>
-                </Grid>
+                <StackPanel>
+                    <TextBlock Text="{DynamicResource LocMonthlyTokens}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                    <TextBlock Text="{Binding OfficialMonthTokens}" FontSize="31" FontWeight="SemiBold" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding OfficialMonthStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0" />
+                </StackPanel>
             </Border>
 
             <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
                 <StackPanel>
                     <TextBlock Text="{DynamicResource LocDailyTokens}" Style="{StaticResource SectionHeader}" />
-                    <TextBlock Text="{DynamicResource LocDailyTokensDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" Margin="0,-4,0,10" />
+                    <TextBlock Text="{DynamicResource LocDailyTokensDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,-4,0,10" />
                     <ItemsControl ItemsSource="{Binding DailyUsage}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>

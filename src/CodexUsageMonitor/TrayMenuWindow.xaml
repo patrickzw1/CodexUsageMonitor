@@ -19,8 +19,8 @@
         </Style>
     </Window.Resources>
 
-    <Border Background="{DynamicResource SurfaceBrush}"
-            BorderBrush="{DynamicResource FrameBorderBrush}"
+    <Border Background="{DynamicResource FlyoutSurfaceBrush}"
+            BorderBrush="{DynamicResource FlyoutBorderBrush}"
             BorderThickness="1"
             CornerRadius="16"
             Padding="10"

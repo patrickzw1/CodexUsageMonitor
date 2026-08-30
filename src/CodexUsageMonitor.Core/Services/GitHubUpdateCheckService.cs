@@ -132,13 +132,13 @@ public sealed class GitHubUpdateCheckService : IUpdateCheckService
 
             if (response.StatusCode != HttpStatusCode.OK)
             {
-                return await SaveFailureAsync(cache, now, $"http-{(int)response.StatusCode}", cancellationToken);
+                return SaveFailure(cache, force, $"http-{(int)response.StatusCode}");
             }
 
             using var payload = await ReadBoundedJsonAsync(response.Content, timeout.Token);
             if (!TryParseRelease(payload, out var latestVersion, out var releaseUrl))
             {
-                return await SaveFailureAsync(cache, now, "invalid-release-response", cancellationToken);
+                return SaveFailure(cache, force, "invalid-release-response");
             }
 
             var updated = cache with
@@ -153,19 +153,19 @@ public sealed class GitHubUpdateCheckService : IUpdateCheckService
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return await SaveFailureAsync(cache, now, "timeout", cancellationToken);
+            return SaveFailure(cache, force, "timeout");
         }
         catch (HttpRequestException)
         {
-            return await SaveFailureAsync(cache, now, "network", cancellationToken);
+            return SaveFailure(cache, force, "network");
         }
         catch (JsonException)
         {
-            return await SaveFailureAsync(cache, now, "invalid-json", cancellationToken);
+            return SaveFailure(cache, force, "invalid-json");
         }
         catch (InvalidDataException)
         {
-            return await SaveFailureAsync(cache, now, "response-too-large", cancellationToken);
+            return SaveFailure(cache, force, "response-too-large");
         }
     }
 
@@ -205,14 +205,15 @@ public sealed class GitHubUpdateCheckService : IUpdateCheckService
             networkRequested);
     }
 
-    private async Task<UpdateCheckResult> SaveFailureAsync(
+    private UpdateCheckResult SaveFailure(
         UpdateCheckCache cache,
-        DateTimeOffset checkedAt,
-        string error,
-        CancellationToken cancellationToken)
+        bool force,
+        string error)
     {
-        await _settings.SetUpdateCheckCacheAsync(cache with { LastCheckedAt = checkedAt }, cancellationToken);
-        return new UpdateCheckResult(UpdateCheckOutcome.Failed, cache.LatestVersion, null, true, error);
+        var cached = Evaluate(cache, force, networkRequested: true, skippedWhenCurrent: false);
+        return cached.IsUpdateAvailable
+            ? cached with { Error = error }
+            : new UpdateCheckResult(UpdateCheckOutcome.Failed, cache.LatestVersion, null, true, error);
     }
 
     private static async Task<JsonDocument> ReadBoundedJsonAsync(
@@ -230,11 +231,7 @@ public sealed class GitHubUpdateCheckService : IUpdateCheckService
         while (true)
         {
             var read = await stream.ReadAsync(chunk, cancellationToken);
-            if (read == 0)
-            {
-                break;
-            }
-
+            if (read == 0) break;
             if (buffer.Length + read > MaxResponseBytes)
             {
                 throw new InvalidDataException("GitHub release response is too large.");
@@ -247,10 +244,7 @@ public sealed class GitHubUpdateCheckService : IUpdateCheckService
         return await JsonDocument.ParseAsync(buffer, cancellationToken: cancellationToken);
     }
 
-    private static bool TryParseRelease(
-        JsonDocument document,
-        out string latestVersion,
-        out Uri releaseUrl)
+    private static bool TryParseRelease(JsonDocument document, out string latestVersion, out Uri releaseUrl)
     {
         latestVersion = string.Empty;
         releaseUrl = ReleasesFallbackUri;
@@ -278,6 +272,8 @@ public sealed class GitHubUpdateCheckService : IUpdateCheckService
             && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase)
             && uri.IsDefaultPort
             && string.IsNullOrEmpty(uri.UserInfo)
+            && string.IsNullOrEmpty(uri.Query)
+            && string.IsNullOrEmpty(uri.Fragment)
             && uri.AbsolutePath.StartsWith(
                 "/patrickzw1/CodexUsageMonitor/releases/",
                 StringComparison.OrdinalIgnoreCase))
@@ -323,11 +319,7 @@ internal sealed class SemanticVersion : IComparable<SemanticVersion>
     public static bool TryParse(string? value, out SemanticVersion version)
     {
         version = null!;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
+        if (string.IsNullOrWhiteSpace(value)) return false;
         var match = Pattern.Match(value);
         if (!match.Success
             || !int.TryParse(match.Groups[1].Value, out var major)
@@ -356,11 +348,7 @@ internal sealed class SemanticVersion : IComparable<SemanticVersion>
 
     public int CompareTo(SemanticVersion? other)
     {
-        if (other is null)
-        {
-            return 1;
-        }
-
+        if (other is null) return 1;
         var numeric = Major.CompareTo(other.Major);
         if (numeric == 0) numeric = Minor.CompareTo(other.Minor);
         if (numeric == 0) numeric = Patch.CompareTo(other.Patch);
@@ -373,10 +361,7 @@ internal sealed class SemanticVersion : IComparable<SemanticVersion>
         for (var index = 0; index < Math.Min(left.Length, right.Length); index++)
         {
             var comparison = CompareIdentifier(left[index], right[index]);
-            if (comparison != 0)
-            {
-                return comparison;
-            }
+            if (comparison != 0) return comparison;
         }
 
         return left.Length.CompareTo(right.Length);

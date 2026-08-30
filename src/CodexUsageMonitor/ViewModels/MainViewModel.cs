@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Windows.Media;
 using System.Windows.Input;
@@ -24,6 +25,8 @@ public sealed class MainViewModel : ObservableObject
     private readonly Action<Uri> _openUri;
     private readonly AsyncRelayCommand _refreshCommand;
     private readonly AsyncRelayCommand _checkForUpdatesCommand;
+    private readonly AsyncRelayCommand _updateActionCommand;
+    private readonly AsyncRelayCommand _snoozeUpdateCommand;
     private readonly HashSet<string> _sentExpiryNotifications = new(StringComparer.Ordinal);
     private readonly object _lifecycleSync = new();
     private readonly object _refreshSync = new();
@@ -58,9 +61,9 @@ public sealed class MainViewModel : ObservableObject
     private bool _isUpdateChecking;
     private string _currentPage = "overview";
     private string _selectedModelRange = "7d";
-    private UsageAggregation? _todayUsage;
-    private UsageAggregation? _sevenDayUsage;
-    private UsageAggregation? _thirtyDayUsage;
+    private UsageAggregation? _localTodayUsage;
+    private UsageAggregation? _localSevenDayUsage;
+    private UsageAggregation? _localThirtyDayUsage;
     private string _planDisplay = "—";
     private string _syncText = "等待同步";
     private MediaBrush _syncStatusBrush = MediaBrushes.DarkGoldenrod;
@@ -95,7 +98,9 @@ public sealed class MainViewModel : ObservableObject
     private string _cacheHit = "—";
     private string _cacheSavings = "—";
     private string _pricingStatus = "等待价格同步";
-    private string _monthTokens = "0";
+    private string _officialMonthTokens = "—";
+    private string _officialMonthStatus = "等待官方用量";
+    private string _localMonthTokens = "0";
     private double _uncachedPercent;
     private double _cachedPercent;
     private double _outputPercent;
@@ -120,7 +125,9 @@ public sealed class MainViewModel : ObservableObject
     private string _resetDetailsStatus = "尚未同步";
     private bool _hasResetCreditRows;
     private string _resetCreditEmptyText = "尚未同步重置卡明细";
-    private string _modelRangeTokens = "0";
+    private string _officialRangeTokens = "—";
+    private string _officialRangeStatus = "等待官方用量";
+    private string _localModelRangeTokens = "0";
     private string _modelRangeCost = "—";
     private string _modelRangeCacheHit = "—";
     private string _modelRangeLabel = "最近 7 天";
@@ -135,16 +142,22 @@ public sealed class MainViewModel : ObservableObject
         IDashboardService dashboardService,
         IStartupRegistrationService startupService,
         IUpdateCheckService? updateCheckService = null,
-        Action<Uri>? openUri = null)
+        Action<Uri>? openUri = null,
+        string? appVersion = null)
     {
         _dashboardService = dashboardService;
         _startupService = startupService;
         _updateCheckService = updateCheckService;
         _openUri = openUri ?? (uri => StartShell(uri.AbsoluteUri));
+        AppVersionText = FormatAppVersion(appVersion ?? ReadAppVersion());
         _refreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsLoading);
         _checkForUpdatesCommand = new AsyncRelayCommand(
             CheckForUpdatesAsync,
             () => _updateCheckService is not null && !IsUpdateChecking);
+        _updateActionCommand = new AsyncRelayCommand(
+            HandleUpdateActionAsync,
+            () => IsUpdateAvailable && !IsUpdateChecking);
+        _snoozeUpdateCommand = new AsyncRelayCommand(SnoozeUpdateAsync);
         RefreshCommand = _refreshCommand;
         ShowOverviewCommand = new RelayCommand(() => CurrentPage = "overview");
         ShowModelsCommand = new RelayCommand(() => CurrentPage = "models");
@@ -161,8 +174,9 @@ public sealed class MainViewModel : ObservableObject
         SetEnglishLanguageCommand = new RelayCommand(() => SetEnglish(true, persist: true));
         ToggleUpdateFlyoutCommand = new RelayCommand(ToggleUpdateFlyout);
         CloseUpdateFlyoutCommand = new RelayCommand(() => IsUpdateFlyoutOpen = false);
-        SnoozeUpdateCommand = new AsyncRelayCommand(SnoozeUpdateAsync);
+        SnoozeUpdateCommand = _snoozeUpdateCommand;
         ViewUpdateCommand = new RelayCommand(ViewUpdate);
+        UpdateActionCommand = _updateActionCommand;
         CheckForUpdatesCommand = _checkForUpdatesCommand;
         QuitCommand = new RelayCommand(() => QuitRequested?.Invoke(this, EventArgs.Empty));
     }
@@ -191,6 +205,7 @@ public sealed class MainViewModel : ObservableObject
     public ICommand CloseUpdateFlyoutCommand { get; }
     public ICommand SnoozeUpdateCommand { get; }
     public ICommand ViewUpdateCommand { get; }
+    public ICommand UpdateActionCommand { get; }
     public ICommand QuitCommand { get; }
 
     public ObservableCollection<ModelUsageRowViewModel> Models { get; } = [];
@@ -218,6 +233,7 @@ public sealed class MainViewModel : ObservableObject
             if (SetProperty(ref _isUpdateChecking, value))
             {
                 _checkForUpdatesCommand.RaiseCanExecuteChanged();
+                _updateActionCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -285,7 +301,9 @@ public sealed class MainViewModel : ObservableObject
     public string CacheHit { get => _cacheHit; private set => SetProperty(ref _cacheHit, value); }
     public string CacheSavings { get => _cacheSavings; private set => SetProperty(ref _cacheSavings, value); }
     public string PricingStatus { get => _pricingStatus; private set => SetProperty(ref _pricingStatus, value); }
-    public string MonthTokens { get => _monthTokens; private set => SetProperty(ref _monthTokens, value); }
+    public string OfficialMonthTokens { get => _officialMonthTokens; private set => SetProperty(ref _officialMonthTokens, value); }
+    public string OfficialMonthStatus { get => _officialMonthStatus; private set => SetProperty(ref _officialMonthStatus, value); }
+    public string LocalMonthTokens { get => _localMonthTokens; private set => SetProperty(ref _localMonthTokens, value); }
     public double UncachedPercent { get => _uncachedPercent; private set => SetProperty(ref _uncachedPercent, value); }
     public double CachedPercent { get => _cachedPercent; private set => SetProperty(ref _cachedPercent, value); }
     public double OutputPercent { get => _outputPercent; private set => SetProperty(ref _outputPercent, value); }
@@ -297,7 +315,9 @@ public sealed class MainViewModel : ObservableObject
     public string ResetDetailsStatus { get => _resetDetailsStatus; private set => SetProperty(ref _resetDetailsStatus, value); }
     public bool HasResetCreditRows { get => _hasResetCreditRows; private set => SetProperty(ref _hasResetCreditRows, value); }
     public string ResetCreditEmptyText { get => _resetCreditEmptyText; private set => SetProperty(ref _resetCreditEmptyText, value); }
-    public string ModelRangeTokens { get => _modelRangeTokens; private set => SetProperty(ref _modelRangeTokens, value); }
+    public string OfficialRangeTokens { get => _officialRangeTokens; private set => SetProperty(ref _officialRangeTokens, value); }
+    public string OfficialRangeStatus { get => _officialRangeStatus; private set => SetProperty(ref _officialRangeStatus, value); }
+    public string LocalModelRangeTokens { get => _localModelRangeTokens; private set => SetProperty(ref _localModelRangeTokens, value); }
     public string ModelRangeCost { get => _modelRangeCost; private set => SetProperty(ref _modelRangeCost, value); }
     public string ModelRangeCacheHit { get => _modelRangeCacheHit; private set => SetProperty(ref _modelRangeCacheHit, value); }
     public string ModelRangeLabel { get => _modelRangeLabel; private set => SetProperty(ref _modelRangeLabel, value); }
@@ -315,15 +335,28 @@ public sealed class MainViewModel : ObservableObject
         get => _isUpdateAvailable;
         private set
         {
-            if (SetProperty(ref _isUpdateAvailable, value) && !value)
+            if (!SetProperty(ref _isUpdateAvailable, value))
+            {
+                return;
+            }
+
+            if (!value)
             {
                 IsUpdateFlyoutOpen = false;
             }
+
+            _updateActionCommand.RaiseCanExecuteChanged();
         }
     }
     public bool IsUpdateFlyoutOpen { get => _isUpdateFlyoutOpen; set => SetProperty(ref _isUpdateFlyoutOpen, value); }
     public string LatestVersionText => string.IsNullOrWhiteSpace(_latestVersion) ? string.Empty : $"v{_latestVersion}";
+    public string AppVersionText { get; }
     public string UpdateCheckStatus { get => _updateCheckStatus; private set => SetProperty(ref _updateCheckStatus, value); }
+    public string UpdateFlyoutMessage => IsEnglish
+        ? "A new version is available on GitHub. Exit the old app, extract the ZIP to a new empty folder, then run it; the app will not download or modify installation files."
+        : "GitHub 已发布新版本。请先退出旧程序，将下载的 ZIP 解压到新的空目录后再运行；应用不会下载或修改安装文件。";
+    public string UpdateActionText => IsEnglish ? "Open download page" : "打开下载页";
+    public string UpdateSecondaryActionText => IsEnglish ? "Remind me later" : "稍后提醒";
 
     public bool AutoUpdateCheckEnabled
     {
@@ -544,7 +577,6 @@ public sealed class MainViewModel : ObservableObject
         {
             tasks.Add(updateCheck);
         }
-
         await AsyncShutdown.WaitAsync(tasks, timeout);
     }
 
@@ -635,7 +667,6 @@ public sealed class MainViewModel : ObservableObject
         }
         catch
         {
-            IsUpdateAvailable = false;
             if (showStatus)
             {
                 _updateUiStatus = UpdateUiStatus.Failed;
@@ -650,6 +681,12 @@ public sealed class MainViewModel : ObservableObject
                 _activeUpdateCheck = null;
             }
         }
+    }
+
+    private Task HandleUpdateActionAsync()
+    {
+        ViewUpdate();
+        return Task.CompletedTask;
     }
 
     private void ToggleUpdateFlyout()
@@ -715,6 +752,9 @@ public sealed class MainViewModel : ObservableObject
             UpdateUiStatus.Snoozed => IsEnglish ? "This version is snoozed for 24 hours" : "已延后 24 小时提醒",
             _ => IsEnglish ? "Checks automatically at most once every 24 hours" : "每 24 小时最多自动检查一次"
         };
+        OnPropertyChanged(nameof(UpdateFlyoutMessage));
+        OnPropertyChanged(nameof(UpdateActionText));
+        OnPropertyChanged(nameof(UpdateSecondaryActionText));
     }
 
     private Task StartRefreshAsync(bool forceAppServer, bool enforceCooldown)
@@ -884,12 +924,12 @@ public sealed class MainViewModel : ObservableObject
         SparkWeeklyReset = FormatReset(spark?.Weekly) + StaleSuffix(snapshot.Freshness.IsSparkQuotaStale, snapshot.Freshness.SparkQuotaUpdatedAt);
 
         ApplyResetCredits(snapshot);
-        ApplyUsage(snapshot.Usage, snapshot.Pricing);
-        _todayUsage = snapshot.TodayUsage;
-        _sevenDayUsage = snapshot.SevenDayUsage;
-        _thirtyDayUsage = snapshot.ThirtyDayUsage;
+        ApplyLocalUsage(snapshot.LocalMonthUsage, snapshot.Pricing);
+        _localTodayUsage = snapshot.LocalTodayUsage;
+        _localSevenDayUsage = snapshot.LocalSevenDayUsage;
+        _localThirtyDayUsage = snapshot.LocalThirtyDayUsage;
+        ApplyOfficialUsage(snapshot);
         ApplySelectedModelUsage();
-        ApplyDailyUsage(snapshot.OfficialUsage);
     }
 
     private void ApplyResetCredits(DashboardSnapshot snapshot)
@@ -994,7 +1034,7 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private void ApplyUsage(UsageAggregation usage, PricingSnapshot pricing)
+    private void ApplyLocalUsage(UsageAggregation usage, PricingSnapshot pricing)
     {
         MonthCost = usage.EstimatedCostUsd.HasValue ? $"≈ ${usage.EstimatedCostUsd:0.00}" : IsEnglish ? "No price" : "暂无定价";
         CacheHit = $"{usage.CacheHitPercent:0}%";
@@ -1002,7 +1042,7 @@ public sealed class MainViewModel : ObservableObject
             ? IsEnglish ? $"Saved about ${usage.EstimatedCacheSavingsUsd:0.00}" : $"节省约 ${usage.EstimatedCacheSavingsUsd:0.00}"
             : IsEnglish ? "No estimate" : "暂无估算";
         PricingStatus = FormatPricingStatus(usage, pricing);
-        MonthTokens = FormatDisplayTokens(usage.TotalTokens);
+        LocalMonthTokens = FormatDisplayTokens(usage.TotalTokens);
 
         var composition = usage.Composition;
         UncachedPercent = composition.UncachedInputPercent;
@@ -1033,9 +1073,9 @@ public sealed class MainViewModel : ObservableObject
     {
         var usage = _selectedModelRange switch
         {
-            "today" => _todayUsage,
-            "30d" => _thirtyDayUsage,
-            _ => _sevenDayUsage
+            "today" => _localTodayUsage,
+            "30d" => _localThirtyDayUsage,
+            _ => _localSevenDayUsage
         };
         ModelRangeLabel = _selectedModelRange switch
         {
@@ -1043,6 +1083,16 @@ public sealed class MainViewModel : ObservableObject
             "30d" => IsEnglish ? "Last 30 days" : "最近 30 天",
             _ => IsEnglish ? "Last 7 days" : "最近 7 天"
         };
+        var today = DateOnly.FromDateTime(_lastSnapshot?.RefreshedAt.DateTime ?? DateTime.Today);
+        var from = _selectedModelRange switch
+        {
+            "today" => today,
+            "30d" => today.AddDays(-29),
+            _ => today.AddDays(-6)
+        };
+        var officialDays = GetOfficialDays(from, today.AddDays(1));
+        OfficialRangeTokens = FormatOfficialTotal(officialDays);
+        OfficialRangeStatus = FormatOfficialUsageStatus(officialDays);
         Models.Clear();
         if (usage is null)
         {
@@ -1050,7 +1100,7 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        ModelRangeTokens = FormatDisplayTokens(usage.TotalTokens);
+        LocalModelRangeTokens = FormatDisplayTokens(usage.TotalTokens);
         ModelRangeCost = usage.EstimatedCostUsd.HasValue ? $"≈ ${usage.EstimatedCostUsd:0.00}" : IsEnglish ? "No price" : "暂无定价";
         ModelRangeCacheHit = $"{usage.CacheHitPercent:0}%";
         ModelPricingStatus = FormatPricingStatus(usage, null);
@@ -1087,18 +1137,13 @@ public sealed class MainViewModel : ObservableObject
         HasModelRows = Models.Count > 0;
     }
 
-    private void ApplyDailyUsage(OfficialUsageSnapshot? officialUsage)
+    private void ApplyOfficialUsage(DashboardSnapshot snapshot)
     {
         DailyUsage.Clear();
-        if (officialUsage is null || officialUsage.DailyUsage.Count == 0)
-        {
-            return;
-        }
-
-        var month = officialUsage.DailyUsage
-            .Where(item => item.Date.Year == DateTime.Today.Year && item.Date.Month == DateTime.Today.Month)
-            .OrderByDescending(item => item.Date)
-            .ToArray();
+        var today = DateOnly.FromDateTime(snapshot.RefreshedAt.DateTime);
+        var month = GetOfficialDays(new DateOnly(today.Year, today.Month, 1), today.AddDays(1));
+        OfficialMonthTokens = FormatOfficialTotal(month);
+        OfficialMonthStatus = FormatOfficialUsageStatus(month);
         var peak = Math.Max(month.Select(item => item.Tokens).DefaultIfEmpty(0).Max(), 1);
         foreach (var day in month)
         {
@@ -1107,6 +1152,53 @@ public sealed class MainViewModel : ObservableObject
                 FormatDisplayTokens(day.Tokens),
                 (double)day.Tokens / peak * 100));
         }
+    }
+
+    private DailyUsagePoint[] GetOfficialDays(DateOnly from, DateOnly to)
+        => (_lastSnapshot?.OfficialUsage?.DailyUsage ?? [])
+            .Where(item => item.Date >= from && item.Date < to)
+            .GroupBy(item => item.Date)
+            .Select(group => group.Last())
+            .OrderByDescending(item => item.Date)
+            .ToArray();
+
+    private string FormatOfficialTotal(IReadOnlyList<DailyUsagePoint> days)
+        => days.Count == 0 ? "—" : FormatDisplayTokens(UsageCalculator.SaturatingSum(days.Select(item => item.Tokens)));
+
+    private string FormatOfficialUsageStatus(IReadOnlyList<DailyUsagePoint> days)
+    {
+        if (days.Count == 0)
+        {
+            return IsEnglish ? "No official daily data in this period" : "此时段暂无官方日数据";
+        }
+
+        var snapshot = _lastSnapshot!;
+        var updatedAt = snapshot.Freshness.DailyUsageUpdatedAt ?? snapshot.OfficialUsageUpdatedAt;
+        var isStale = snapshot.Freshness.DailyUsageUpdatedAt.HasValue
+            ? snapshot.Freshness.IsDailyUsageStale
+            : snapshot.IsOfficialUsageStale;
+        var coverage = IsEnglish
+            ? $"Sum of {days.Count} returned official days · through {days[0].Date.ToString("MMM d", EnglishCulture)}"
+            : $"仅合计官方已返回的 {days.Count} 天 · 截至 {days[0].Date:M月d日}";
+        var cachedDays = days.Count(day => day.IsCached);
+        if (days.Any(day => day.CapturedAt.HasValue))
+        {
+            updatedAt = days.Max(day => day.CapturedAt);
+            isStale = cachedDays > 0;
+        }
+        if (cachedDays > 0 && cachedDays < days.Count)
+        {
+            coverage += IsEnglish ? $" · {cachedDays} cached days" : $" · 含 {cachedDays} 天历史缓存";
+            var oldestCached = days.Where(day => day.IsCached).Min(day => day.CapturedAt);
+            return coverage + (IsEnglish
+                ? $" · mixed freshness; latest fetch {updatedAt?.ToLocalTime():M/d HH:mm}; oldest cache {oldestCached?.ToLocalTime():M/d HH:mm}"
+                : $" · 混合新鲜度；最近获取 {updatedAt?.ToLocalTime():M/d HH:mm}；最早缓存 {oldestCached?.ToLocalTime():M/d HH:mm}");
+        }
+        return updatedAt.HasValue
+            ? coverage + (IsEnglish
+                ? $" · {(isStale ? "cached" : "fetched")} {updatedAt.Value.ToLocalTime():M/d HH:mm}"
+                : $" · {(isStale ? "官方缓存" : "获取于")} {updatedAt.Value.ToLocalTime():M/d HH:mm}")
+            : coverage;
     }
 
     private bool IsUsableWindow(RateLimitWindowSnapshot? window, long expectedMinutes)
@@ -1189,7 +1281,7 @@ public sealed class MainViewModel : ObservableObject
             : pricing.IsLive
                 ? IsEnglish ? "Official prices fetched at startup" : "本次启动获取的官方价格"
                 : IsEnglish ? "Cached or built-in price snapshot" : pricing.StatusMessage ?? "价格快照";
-        return IsEnglish ? $"{source} · {coverage:0}% token coverage" : $"{source} · 覆盖 {coverage:0}% Token";
+        return IsEnglish ? $"{source} · Prices cover {coverage:0}% of local tokens" : $"{source} · 定价覆盖 {coverage:0}% 本地样本";
     }
 
     public static string FormatTokens(long value)
@@ -1651,6 +1743,30 @@ public sealed class MainViewModel : ObservableObject
         {
             // 外部打开失败不影响监控数据。
         }
+    }
+
+    private static string ReadAppVersion()
+        => typeof(MainViewModel).Assembly
+               .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+               .InformationalVersion
+           ?? typeof(MainViewModel).Assembly.GetName().Version?.ToString(3)
+           ?? "0.0.0";
+
+    private static string FormatAppVersion(string version)
+    {
+        var normalized = version.Trim();
+        if (normalized.StartsWith('v'))
+        {
+            normalized = normalized[1..];
+        }
+
+        var metadata = normalized.IndexOf('+');
+        if (metadata >= 0)
+        {
+            normalized = normalized[..metadata];
+        }
+
+        return $"v{(string.IsNullOrWhiteSpace(normalized) ? "0.0.0" : normalized)}";
     }
 }
 

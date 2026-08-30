@@ -599,8 +599,8 @@ public sealed class UsageHistoryRepository(string databasePath)
         {
             if (DateOnly.TryParseExact(dailyReader.GetString(0), "yyyy-MM-dd", out var date))
             {
-                points.Add(new DailyUsagePoint(date, dailyReader.GetInt64(1)));
                 var pointCapturedAt = DateTimeOffset.Parse(dailyReader.GetString(2));
+                points.Add(new DailyUsagePoint(date, dailyReader.GetInt64(1)) { CapturedAt = pointCapturedAt });
                 dailyCapturedAt = !dailyCapturedAt.HasValue || pointCapturedAt > dailyCapturedAt
                     ? pointCapturedAt
                     : dailyCapturedAt;

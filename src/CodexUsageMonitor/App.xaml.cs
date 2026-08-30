@@ -26,13 +26,11 @@ public partial class App : System.Windows.Application
     protected override async void OnStartup(System.Windows.StartupEventArgs e)
     {
         base.OnStartup(e);
-        LocalizationManager.Apply(isEnglish: false);
         ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
-        var explicitShow = e.Args.Contains("--show", StringComparer.OrdinalIgnoreCase)
-                           || e.Args.Any(arg => arg.StartsWith("--page=", StringComparison.OrdinalIgnoreCase))
-                           || Environment.GetEnvironmentVariable("CODEX_USAGE_MONITOR_SHOW_ON_START") == "1";
-        var startHidden = e.Args.Contains("--hidden", StringComparer.OrdinalIgnoreCase) && !explicitShow;
-        var showOnStart = !startHidden;
+        LocalizationManager.Apply(isEnglish: false);
+        var showOnStart = ResolveShowOnStart(
+            e.Args,
+            Environment.GetEnvironmentVariable("CODEX_USAGE_MONITOR_SHOW_ON_START") == "1");
         if (!AcquireSingleInstance(requestShow: showOnStart))
         {
             Shutdown();
@@ -56,11 +54,13 @@ public partial class App : System.Windows.Application
             }
         };
         viewModel.ResetExpiryNotificationRequested += (_, args) =>
+        {
             _notifyIcon?.ShowBalloonTip(
                 7_000,
                 viewModel.IsEnglish ? "Codex reset credits expiring soon" : "Codex 重置卡即将到期",
                 args.Message,
                 Forms.ToolTipIcon.Warning);
+        };
         var requestedPage = e.Args
             .FirstOrDefault(arg => arg.StartsWith("--page=", StringComparison.OrdinalIgnoreCase))?
             .Split('=', 2)[1];
@@ -78,7 +78,7 @@ public partial class App : System.Windows.Application
         }
 
         viewModel.QuitRequested += (_, _) => ShutdownApplication();
-        _window = new MainWindow(viewModel, keepOpen: explicitShow);
+        _window = new MainWindow(viewModel);
         _trayMenu = new TrayMenuWindow(viewModel, ShowWindow, ShutdownApplication);
 
         _applicationIcon = Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? string.Empty);
@@ -100,7 +100,6 @@ public partial class App : System.Windows.Application
                 Dispatcher.BeginInvoke((Action)ShowTrayMenu, DispatcherPriority.ApplicationIdle);
             }
         };
-
         _refreshTimer = new DispatcherTimer { Interval = AutoRefreshInterval };
         _refreshTimer.Tick += async (_, _) => await viewModel.RefreshAutomaticallyAsync();
         _refreshTimer.Start();
@@ -137,6 +136,16 @@ public partial class App : System.Windows.Application
         _singleInstanceMutex?.Dispose();
 
         base.OnExit(e);
+    }
+
+    internal static bool ResolveShowOnStart(
+        IReadOnlyList<string> args,
+        bool showRequestedByEnvironment)
+    {
+        var initialShowRequested = args.Contains("--show", StringComparer.OrdinalIgnoreCase)
+                                   || args.Any(arg => arg.StartsWith("--page=", StringComparison.OrdinalIgnoreCase))
+                                   || showRequestedByEnvironment;
+        return !args.Contains("--hidden", StringComparer.OrdinalIgnoreCase) || initialShowRequested;
     }
 
     private bool AcquireSingleInstance(bool requestShow)
@@ -219,4 +228,5 @@ public partial class App : System.Windows.Application
 
         Shutdown();
     }
+
 }

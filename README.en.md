@@ -10,7 +10,8 @@ This project is released under the [MIT License](LICENSE). You may use, modify, 
 
 - General weekly quota, reset time, and consumption pace forecast based on an even seven-day allocation. When the server returns a valid five-hour window, the overview automatically shows the general five-hour quota at the top; otherwise that row is hidden.
 - Separate five-hour and weekly Spark limits. They are shown only for Pro or higher plans and only when the server returns a Spark quota.
-- Per-model Token usage, cache hit rate, and API-equivalent cost. Estimated costs use the “≈” prefix and show public price coverage; the app does not invent prices for internal models without published pricing.
+- Official monthly and selected-period totals sum only the daily Tokens returned by `account/usage/read`. Local model, cache, and cost analysis is shown separately and never added to official totals.
+- Per-model Token usage, cache hit rate, and API-equivalent cost from local log samples. Estimated costs use the “≈” prefix and show public price coverage of local samples; the app does not invent prices for internal models without published pricing.
 - Model page with real time filters for Today, 7 Days, and 30 Days, ranking bars, and a usage donut chart.
 - Separate non-cached input, cached input, visible output, and reasoning Tokens without double counting.
 - On each app launch, concurrently reads the Markdown pricing tables from OpenAI's official model documentation once. A complete cache is replaced atomically only when prices for every supported model are retrieved successfully; partial results are merged for the current view only and never overwrite the complete cache.
@@ -18,7 +19,7 @@ This project is released under the [MIT License](LICENSE). You may use, modify, 
 - Reset-card details including available count, grant time, validity period, nearest expiration time, and locally observed grant/use/expiration events.
 - Windows tray notifications 7, 3, and 1 day before expiration. Each expiration threshold is notified at most once per app run.
 - A title-bar Settings popover switches light/dark appearance and Chinese/English, and provides an explicit “Start with Windows (in background)” switch. Preferences are stored locally and restored on the next launch; startup remains off by default and requires no administrator privileges.
-- By default, the app anonymously checks this repository's latest stable GitHub Release at most once every 24 hours. When a newer version exists, the title bar offers a reminder that can be snoozed for 24 hours or used to open the official Release page. It never downloads, executes, or replaces the app automatically. Automatic checks can be disabled in Settings, while a manual check bypasses the 24-hour interval.
+- By default, the app anonymously checks this repository's latest stable GitHub Release. After a successful check it does not automatically access the network again for 24 hours; a failed check may retry on a later launch, and a manual check bypasses this interval. It reads only the version and official release-page URL; it never downloads update files or replaces, moves, or deletes the installation directory. When a newer version exists, the title bar can open the official Release page or snooze the reminder, and automatic checks can be disabled in Settings.
 - Automatic refresh every 15 minutes. Global backoff of 15 / 30 / 60 / 120 minutes applies only when the app-server process fails or all three account methods fail; a single-method failure falls back to historical data only for the affected partition. Manual refresh has a two-minute cooldown.
 - If the server reports available reset cards but omits individual card details, one refresh may retry the detail query up to two times. These remain read-only queries and do not invoke a model or consume Tokens.
 
@@ -31,7 +32,7 @@ This project is released under the [MIT License](LICENSE). You may use, modify, 
 - Local database and pricing snapshot: `%LOCALAPPDATA%\CodexUsageMonitor`.
 - SQLite stores hashed rollout source identifiers and parsing checkpoints (which may include a local session ID), plus quota, reset-card, and daily-usage metadata. It does not store prompts or conversation bodies. This version retains those statistics indefinitely by default and has no automatic retention policy or in-app delete button. To clear them, exit the app first, then delete `usage.db`, `usage.db-wal`, and `usage.db-shm` from that directory.
 - Apart from retrieving OpenAI's official pricing pages at startup, the app does not upload local conversation content.
-- Update checks access only `https://api.github.com/repos/patrickzw1/CodexUsageMonitor/releases/latest`. Requests contain no GitHub Token and send no Codex usage, account data, prompts, conversation bodies, local paths, or device identifiers. “View update” opens only a validated GitHub Release page under this repository.
+- Update checks access only `https://api.github.com/repos/patrickzw1/CodexUsageMonitor/releases/latest`. Requests contain no GitHub Token and send no Codex usage, account data, prompts, conversation bodies, local paths, or device identifiers. The app caches only the latest stable version and a constrained official Release-page URL for this repository; it never downloads a ZIP, creates update staging directories, or modifies installation files.
 - Refresh performs only local file scanning and account/quota reads. It does not create model inference requests or consume model Tokens, although it does generate a small number of authenticated metadata reads through Codex.
 - Reset-card reminders use only the `expiresAt` value returned by the server. If the server returns only a count or grant time, the app does not infer an expiration date and temporarily disables the reminder switch.
 
@@ -42,6 +43,10 @@ Security boundary: the app never executes an arbitrary same-named program from `
 ## Downloads and verification
 
 Regular users can download the versioned Windows portable ZIP and `SHA256SUMS.txt` from the [latest GitHub Release](https://github.com/patrickzw1/CodexUsageMonitor/releases/latest).
+
+The app only shows an update reminder and opens the official Release page. To update manually: close the old app; download the portable ZIP from the official Release page; extract it into a new empty directory; then run `CodexUsageMonitor.exe` from that new directory. Do not extract over the old installation directory.
+
+User data and settings live under `%LOCALAPPDATA%\CodexUsageMonitor`, so nothing needs to be copied from the installation directory. The old program directory and any sibling `.update-backup-*` / `.update-failed-*` directories left by earlier versions are entirely for the user to review and handle. The app never moves or deletes them automatically.
 
 After downloading, compare the SHA-256 values in the download directory (using `0.2.1` as an example):
 
@@ -110,16 +115,19 @@ You can provide both source code and ready-to-run Releases. A recommended public
 1. The repository uses the MIT License, so the source can be used, modified, and redistributed.
 2. Build from a version tag with GitHub Actions, then publish the source, portable ZIP, SHA-256 checksum, and release notes together under GitHub Releases.
 3. For regular users, prefer a Microsoft Store MSIX. The Store re-signs it and generally reduces SmartScreen friction.
-4. For direct GitHub downloads, sign the EXE, installer, and updater with a trusted Authenticode/Artifact Signing identity and timestamp them. Keep using the same publisher identity.
+4. For direct GitHub downloads, sign the EXE and installer with a trusted Authenticode/Artifact Signing identity and timestamp them. Keep using the same publisher identity.
 5. Avoid UPX compression, obfuscation, or silent self-update, and keep the build scripts public and reproducible.
 
 Code signing proves publisher identity and file integrity, but it cannot guarantee that a new release will never trigger SmartScreen on its first downloads. Unsigned builds are more likely to be blocked.
 
 ## Accounting rules
 
+- Official monthly and selected-period Tokens are sums of official daily values in that date range, using the same source as the history list. SQLite stores the returned values and replaces an existing date on refresh; local events and lifetime summaries are never added.
+- Missing official days are not treated as zero or filled from local logs. The UI shows the returned day count, latest included date, and fetch/cache timestamp. A period with no official daily data displays “—”.
+- Local model rankings, Token composition, cache hit rates, and API-equivalent costs are separate log-sample analysis, not a breakdown of the official total. Model shares and price coverage also use local samples as their denominator.
 - Cached input is a subset of input Tokens; non-cached input is `input - cached_input`.
 - Reasoning Tokens are a subset of output Tokens; visible output is `output - reasoning_output`.
-- Total Tokens use the rollout's original value. If absent, only `input + output` is used; cache and reasoning are not added again.
+- Local sample Tokens use the rollout's original value. If absent, only `input + output` is used; cache and reasoning are not added again, and local counts never replace official totals.
 - Duplicate cumulative snapshots are removed by session and cumulative counters. A SHA-256 fingerprint is stored for every processed prefix; incremental parsing from a checkpoint is allowed only when the old prefix fingerprint still matches.
 - A first run may scan a large history. Later scans use length, last-write time, and file identity to skip unchanged sources quickly rather than rereading the entire history every 15 minutes. Truncation, file replacement, ordinary in-place rewrites, or appends with a mismatched prefix safely rebuild that source's index. A deliberate in-place modification that preserves both length and last-write time is not reread during steady-state polling; it is revalidated after a later metadata change.
 - Full rebuilds write to a staging table in batches. Formal events and checkpoints are replaced atomically in a single SQLite transaction only after parsing succeeds completely. Cancellation, I/O failure, or a process crash preserves the previous complete index.
