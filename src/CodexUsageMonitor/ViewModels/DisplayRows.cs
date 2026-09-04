@@ -29,3 +29,5 @@ public sealed record DailyUsageRowViewModel(
     string Date,
     string Tokens,
     double RelativeWidth);
+
+public sealed record HistoryTrendData(DateOnly Start, DateOnly End, IReadOnlyList<DailyUsagePoint> Days);

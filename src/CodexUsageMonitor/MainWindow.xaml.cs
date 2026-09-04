@@ -181,6 +181,12 @@ public partial class MainWindow : System.Windows.Window
             {
                 SettingsPopup.IsOpen = false;
             }
+            else if (HistoryPage.HasOpenInputPopup)
+            {
+                // Let the native input handle Escape before page navigation, including date cancellation.
+                base.OnPreviewKeyDown(e);
+                return;
+            }
             else if (DataContext is MainViewModel viewModel && !viewModel.IsOverviewVisible)
             {
                 viewModel.ShowOverviewCommand.Execute(null);

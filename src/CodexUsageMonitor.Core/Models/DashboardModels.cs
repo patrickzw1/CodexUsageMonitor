@@ -71,6 +71,7 @@ public sealed record AppServerSnapshot(
     string? Error)
 {
     public AppServerCompleteness Completeness { get; init; } = AppServerCompleteness.None;
+    public bool HasDailyUsageResponse { get; init; }
     public int SuccessfulMethodCount { get; init; }
     public bool ProcessFailure { get; init; }
 }
@@ -148,7 +149,10 @@ public sealed record UsageAggregation(
     long TotalTokens,
     decimal? EstimatedCostUsd,
     decimal? EstimatedCacheSavingsUsd,
-    double CacheHitPercent);
+    double CacheHitPercent)
+{
+    public decimal? EstimatedCostWithoutCachingUsd { get; init; }
+}
 
 public enum ResetHistoryKind
 {
@@ -209,6 +213,7 @@ public sealed record DashboardPartitionFreshness(
     public bool IsGeneralFiveHourQuotaStale { get; init; }
     public DateTimeOffset? GeneralWeeklyQuotaUpdatedAt { get; init; }
     public bool IsGeneralWeeklyQuotaStale { get; init; }
+    public bool HasCurrentDailyUsageResponse { get; init; }
 
     public static DashboardPartitionFreshness Empty { get; } = new(
         null, false, null, false, null, false, null, false, null, false);

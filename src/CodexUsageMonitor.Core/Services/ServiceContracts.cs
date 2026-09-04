@@ -61,6 +61,12 @@ public interface IDashboardService
         bool forceAppServer = false,
         CancellationToken cancellationToken = default);
 
+    Task<UsageAggregation> QueryLocalUsageAsync(
+        DateOnly startInclusive,
+        DateOnly endInclusive,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Historical local ranges are unavailable for this dashboard service.");
+
     Task<bool> GetNotificationsEnabledAsync(CancellationToken cancellationToken = default);
     Task SetNotificationsEnabledAsync(bool value, CancellationToken cancellationToken = default);
     Task<bool> GetDarkModeEnabledAsync(CancellationToken cancellationToken = default);

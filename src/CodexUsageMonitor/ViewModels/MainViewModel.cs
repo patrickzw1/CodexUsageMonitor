@@ -35,8 +35,10 @@ public sealed class MainViewModel : ObservableObject
     private CancellationTokenSource? _initializationCancellation;
     private Task? _initializationTask;
     private CancellationTokenSource? _refreshCancellation;
+    private CancellationTokenSource? _historyRangeCancellation;
     private readonly CancellationTokenSource _updateCancellation = new();
     private Task? _activeRefresh;
+    private Task? _activeHistoryRangeQuery;
     private Task? _activeUpdateCheck;
     private bool _activeRefreshForcesAppServer;
     private bool _refreshLoopAcceptingRequests;
@@ -94,21 +96,8 @@ public sealed class MainViewModel : ObservableObject
     private string _resetSummary = "详情未返回";
     private string _resetNearestExpiry = "暂无到期信息";
     private double _resetTimelinePercent;
-    private string _monthCost = "—";
-    private string _cacheHit = "—";
-    private string _cacheSavings = "—";
-    private string _pricingStatus = "等待价格同步";
     private string _officialMonthTokens = "—";
     private string _officialMonthStatus = "等待官方用量";
-    private string _localMonthTokens = "0";
-    private double _uncachedPercent;
-    private double _cachedPercent;
-    private double _outputPercent;
-    private double _reasoningPercent;
-    private string _uncachedLegend = "0";
-    private string _cachedLegend = "0";
-    private string _outputLegend = "0";
-    private string _reasoningLegend = "0";
     private bool _notificationsEnabled = true;
     private bool _isDarkMode;
     private bool _isEnglish;
@@ -130,11 +119,45 @@ public sealed class MainViewModel : ObservableObject
     private string _localModelRangeTokens = "0";
     private string _modelRangeCost = "—";
     private string _modelRangeCacheHit = "—";
+    private string _modelRangeCacheSavings = "—";
+    private string _modelRangeCostWithoutCaching = "—";
     private string _modelRangeLabel = "最近 7 天";
+    private string _modelRangeTokensLabel = "官方 Tokens · 所选时段";
     private bool _hasModelRows;
     private bool _hasResetExpiry;
     private string _resetNotificationStatus = "等待获取有效期";
     private string _modelPricingStatus = "等待价格同步";
+    private string _historyMode = "month";
+    private bool _historyRangeInitialized;
+    private int _selectedHistoryYear;
+    private int _selectedHistoryMonth;
+    private DateTime? _historyCustomStartDate;
+    private DateTime? _historyCustomEndDate;
+    private DateTime? _historyMaximumDate;
+    private string _historyValidationMessage = string.Empty;
+    private string _historyRangeSummary = "等待刷新";
+    private string _historyOfficialTokens = "—";
+    private string _historyOfficialStatus = "等待官方用量";
+    private string _historyOfficialReturnedDays = "0";
+    private string _historyOfficialAverageTokens = "—";
+    private string _historyOfficialPeakDate = "—";
+    private string _historyOfficialPeakTokens = "—";
+    private bool _hasHistoryOfficialDays;
+    private bool _isHistoryRangeLoading;
+    private string _historyLocalCost = "—";
+    private string _historyLocalTokens = "—";
+    private string _historyLocalCacheHit = "—";
+    private string _historyLocalCostWithoutCaching = "—";
+    private string _historyLocalCacheSavings = "—";
+    private string _historyLocalPricingStatus = "等待本机样本";
+    private long _historyRangeVersion;
+    private DateOnly? _historyAppliedStart;
+    private DateOnly? _historyAppliedEnd;
+    private UsageAggregation? _historyLocalUsage;
+    private DashboardSnapshot? _historySnapshot;
+    private HistoryTrendData? _historyTrend;
+    private bool _isHistoryTrendVisible;
+    private bool _historySelectionPending;
     private DateTimeOffset? _lastRefreshCompletedAt;
     private DashboardSnapshot? _lastSnapshot;
 
@@ -166,6 +189,13 @@ public sealed class MainViewModel : ObservableObject
         SelectTodayCommand = new RelayCommand(() => SelectModelRange("today"));
         SelectSevenDayCommand = new RelayCommand(() => SelectModelRange("7d"));
         SelectThirtyDayCommand = new RelayCommand(() => SelectModelRange("30d"));
+        SelectHistoryMonthModeCommand = new RelayCommand(() => SetHistoryMode("month"));
+        SelectHistoryCustomModeCommand = new RelayCommand(() => SetHistoryMode("custom"));
+        PreviousHistoryMonthCommand = new RelayCommand(() => MoveHistoryMonth(-1));
+        NextHistoryMonthCommand = new RelayCommand(() => MoveHistoryMonth(1));
+        ApplyHistoryRangeCommand = new RelayCommand(ApplyHistorySelection);
+        ShowHistoryListCommand = new RelayCommand(() => SetHistoryTrendVisible(false));
+        ShowHistoryTrendCommand = new RelayCommand(() => SetHistoryTrendVisible(true));
         OpenUsagePageCommand = new RelayCommand(OpenUsagePage);
         OpenDataFolderCommand = new RelayCommand(OpenDataFolder);
         SetLightThemeCommand = new RelayCommand(() => SetDarkMode(false, persist: true));
@@ -194,6 +224,13 @@ public sealed class MainViewModel : ObservableObject
     public ICommand SelectTodayCommand { get; }
     public ICommand SelectSevenDayCommand { get; }
     public ICommand SelectThirtyDayCommand { get; }
+    public ICommand SelectHistoryMonthModeCommand { get; }
+    public ICommand SelectHistoryCustomModeCommand { get; }
+    public ICommand PreviousHistoryMonthCommand { get; }
+    public ICommand NextHistoryMonthCommand { get; }
+    public ICommand ApplyHistoryRangeCommand { get; }
+    public ICommand ShowHistoryListCommand { get; }
+    public ICommand ShowHistoryTrendCommand { get; }
     public ICommand OpenUsagePageCommand { get; }
     public ICommand OpenDataFolderCommand { get; }
     public ICommand SetLightThemeCommand { get; }
@@ -212,6 +249,17 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<ResetCreditRowViewModel> ResetCredits { get; } = [];
     public ObservableCollection<ResetHistoryRowViewModel> ResetHistory { get; } = [];
     public ObservableCollection<DailyUsageRowViewModel> DailyUsage { get; } = [];
+    public HistoryTrendData? HistoryTrend { get => _historyTrend; private set => SetProperty(ref _historyTrend, value); }
+    public bool IsHistoryTrendVisible { get => _isHistoryTrendVisible; set => SetHistoryTrendVisible(value); }
+    public bool IsHistoryListVisible { get => !_isHistoryTrendVisible; set => SetHistoryTrendVisible(!value); }
+
+    private void SetHistoryTrendVisible(bool value)
+    {
+        if (SetProperty(ref _isHistoryTrendVisible, value, nameof(IsHistoryTrendVisible)))
+            OnPropertyChanged(nameof(IsHistoryListVisible));
+    }
+    public ObservableCollection<int> HistoryYears { get; } = [];
+    public IReadOnlyList<int> HistoryMonths { get; } = Enumerable.Range(1, 12).ToArray();
 
     public bool IsLoading
     {
@@ -297,21 +345,8 @@ public sealed class MainViewModel : ObservableObject
     public string ResetSummary { get => _resetSummary; private set => SetProperty(ref _resetSummary, value); }
     public string ResetNearestExpiry { get => _resetNearestExpiry; private set => SetProperty(ref _resetNearestExpiry, value); }
     public double ResetTimelinePercent { get => _resetTimelinePercent; private set => SetProperty(ref _resetTimelinePercent, value); }
-    public string MonthCost { get => _monthCost; private set => SetProperty(ref _monthCost, value); }
-    public string CacheHit { get => _cacheHit; private set => SetProperty(ref _cacheHit, value); }
-    public string CacheSavings { get => _cacheSavings; private set => SetProperty(ref _cacheSavings, value); }
-    public string PricingStatus { get => _pricingStatus; private set => SetProperty(ref _pricingStatus, value); }
     public string OfficialMonthTokens { get => _officialMonthTokens; private set => SetProperty(ref _officialMonthTokens, value); }
     public string OfficialMonthStatus { get => _officialMonthStatus; private set => SetProperty(ref _officialMonthStatus, value); }
-    public string LocalMonthTokens { get => _localMonthTokens; private set => SetProperty(ref _localMonthTokens, value); }
-    public double UncachedPercent { get => _uncachedPercent; private set => SetProperty(ref _uncachedPercent, value); }
-    public double CachedPercent { get => _cachedPercent; private set => SetProperty(ref _cachedPercent, value); }
-    public double OutputPercent { get => _outputPercent; private set => SetProperty(ref _outputPercent, value); }
-    public double ReasoningPercent { get => _reasoningPercent; private set => SetProperty(ref _reasoningPercent, value); }
-    public string UncachedLegend { get => _uncachedLegend; private set => SetProperty(ref _uncachedLegend, value); }
-    public string CachedLegend { get => _cachedLegend; private set => SetProperty(ref _cachedLegend, value); }
-    public string OutputLegend { get => _outputLegend; private set => SetProperty(ref _outputLegend, value); }
-    public string ReasoningLegend { get => _reasoningLegend; private set => SetProperty(ref _reasoningLegend, value); }
     public string ResetDetailsStatus { get => _resetDetailsStatus; private set => SetProperty(ref _resetDetailsStatus, value); }
     public bool HasResetCreditRows { get => _hasResetCreditRows; private set => SetProperty(ref _hasResetCreditRows, value); }
     public string ResetCreditEmptyText { get => _resetCreditEmptyText; private set => SetProperty(ref _resetCreditEmptyText, value); }
@@ -320,11 +355,91 @@ public sealed class MainViewModel : ObservableObject
     public string LocalModelRangeTokens { get => _localModelRangeTokens; private set => SetProperty(ref _localModelRangeTokens, value); }
     public string ModelRangeCost { get => _modelRangeCost; private set => SetProperty(ref _modelRangeCost, value); }
     public string ModelRangeCacheHit { get => _modelRangeCacheHit; private set => SetProperty(ref _modelRangeCacheHit, value); }
+    public string ModelRangeCacheSavings { get => _modelRangeCacheSavings; private set => SetProperty(ref _modelRangeCacheSavings, value); }
+    public string ModelRangeCostWithoutCaching { get => _modelRangeCostWithoutCaching; private set => SetProperty(ref _modelRangeCostWithoutCaching, value); }
     public string ModelRangeLabel { get => _modelRangeLabel; private set => SetProperty(ref _modelRangeLabel, value); }
+    public string ModelRangeTokensLabel { get => _modelRangeTokensLabel; private set => SetProperty(ref _modelRangeTokensLabel, value); }
     public bool HasModelRows { get => _hasModelRows; private set => SetProperty(ref _hasModelRows, value); }
     public bool HasResetExpiry { get => _hasResetExpiry; private set => SetProperty(ref _hasResetExpiry, value); }
     public string ResetNotificationStatus { get => _resetNotificationStatus; private set => SetProperty(ref _resetNotificationStatus, value); }
     public string ModelPricingStatus { get => _modelPricingStatus; private set => SetProperty(ref _modelPricingStatus, value); }
+    public bool IsHistoryMonthMode => _historyMode == "month";
+    public bool IsHistoryCustomMode => _historyMode == "custom";
+    public int SelectedHistoryYear
+    {
+        get => _selectedHistoryYear;
+        set
+        {
+            if (SetProperty(ref _selectedHistoryYear, value))
+            {
+                HistorySelectionChanged();
+            }
+        }
+    }
+    public int SelectedHistoryMonth
+    {
+        get => _selectedHistoryMonth;
+        set
+        {
+            if (SetProperty(ref _selectedHistoryMonth, value))
+            {
+                HistorySelectionChanged();
+            }
+        }
+    }
+    public DateTime? HistoryCustomStartDate
+    {
+        get => _historyCustomStartDate;
+        set
+        {
+            if (SetProperty(ref _historyCustomStartDate, value?.Date))
+            {
+                HistorySelectionChanged();
+            }
+        }
+    }
+    public DateTime? HistoryCustomEndDate
+    {
+        get => _historyCustomEndDate;
+        set
+        {
+            if (SetProperty(ref _historyCustomEndDate, value?.Date))
+            {
+                HistorySelectionChanged();
+            }
+        }
+    }
+    public DateTime? HistoryMaximumDate { get => _historyMaximumDate; private set => SetProperty(ref _historyMaximumDate, value); }
+    public string HistoryValidationMessage { get => _historyValidationMessage; private set { SetProperty(ref _historyValidationMessage, value); OnPropertyChanged(nameof(HasHistoryValidationError)); } }
+    public bool HasHistoryValidationError => !string.IsNullOrWhiteSpace(HistoryValidationMessage);
+    public string HistoryRangeSummary { get => _historyRangeSummary; private set => SetProperty(ref _historyRangeSummary, value); }
+    public string HistoryOfficialTokens { get => _historyOfficialTokens; private set => SetProperty(ref _historyOfficialTokens, value); }
+    public string HistoryOfficialStatus { get => _historyOfficialStatus; private set => SetProperty(ref _historyOfficialStatus, value); }
+    public string HistoryOfficialReturnedDays { get => _historyOfficialReturnedDays; private set => SetProperty(ref _historyOfficialReturnedDays, value); }
+    public string HistoryOfficialAverageTokens { get => _historyOfficialAverageTokens; private set => SetProperty(ref _historyOfficialAverageTokens, value); }
+    public string HistoryOfficialPeakDate { get => _historyOfficialPeakDate; private set => SetProperty(ref _historyOfficialPeakDate, value); }
+    public string HistoryOfficialPeakTokens { get => _historyOfficialPeakTokens; private set => SetProperty(ref _historyOfficialPeakTokens, value); }
+    public bool HasHistoryOfficialDays { get => _hasHistoryOfficialDays; private set => SetProperty(ref _hasHistoryOfficialDays, value); }
+    public bool IsHistoryRangeLoading { get => _isHistoryRangeLoading; private set => SetProperty(ref _isHistoryRangeLoading, value); }
+    public string HistoryLocalCost { get => _historyLocalCost; private set => SetProperty(ref _historyLocalCost, value); }
+    public string HistoryLocalTokens { get => _historyLocalTokens; private set => SetProperty(ref _historyLocalTokens, value); }
+    public string HistoryLocalCacheHit { get => _historyLocalCacheHit; private set => SetProperty(ref _historyLocalCacheHit, value); }
+    public string HistoryLocalCostWithoutCaching { get => _historyLocalCostWithoutCaching; private set => SetProperty(ref _historyLocalCostWithoutCaching, value); }
+    public string HistoryLocalCacheSavings { get => _historyLocalCacheSavings; private set => SetProperty(ref _historyLocalCacheSavings, value); }
+    public string HistoryLocalPricingStatus { get => _historyLocalPricingStatus; private set => SetProperty(ref _historyLocalPricingStatus, value); }
+    public bool CanSelectNextHistoryMonth
+    {
+        get
+        {
+            if (!_historyRangeInitialized || _lastSnapshot is null || _selectedHistoryYear <= 0 || _selectedHistoryMonth is < 1 or > 12)
+            {
+                return false;
+            }
+
+            var currentMonth = new DateOnly(_lastSnapshot.RefreshedAt.Year, _lastSnapshot.RefreshedAt.Month, 1);
+            return new DateOnly(_selectedHistoryYear, _selectedHistoryMonth, 1).AddMonths(1) <= currentMonth;
+        }
+    }
     public bool IsDarkMode => _isDarkMode;
     public bool IsLightMode => !_isDarkMode;
     public bool IsEnglish => _isEnglish;
@@ -520,6 +635,7 @@ public sealed class MainViewModel : ObservableObject
     public async Task StopAsync(TimeSpan timeout)
     {
         Task? refresh;
+        Task? historyRangeQuery;
         Task startupSettingsWriteTask;
         Task notificationSettingsWriteTask;
         Task themeSettingsWriteTask;
@@ -532,6 +648,8 @@ public sealed class MainViewModel : ObservableObject
             _shutdownStarted = true;
             _initializationCancellation?.Cancel();
             _updateCancellation.Cancel();
+            _historyRangeCancellation?.Cancel();
+            historyRangeQuery = _activeHistoryRangeQuery;
             initializationTask = _initializationTask;
             lock (_refreshSync)
             {
@@ -569,6 +687,10 @@ public sealed class MainViewModel : ObservableObject
         {
             tasks.Add(refresh);
         }
+        if (historyRangeQuery is not null)
+        {
+            tasks.Add(historyRangeQuery);
+        }
         if (initializationTask is not null)
         {
             tasks.Add(initializationTask);
@@ -587,6 +709,7 @@ public sealed class MainViewModel : ObservableObject
             _refreshCancellation?.Cancel();
         }
 
+        _historyRangeCancellation?.Cancel();
         _updateCancellation.Cancel();
     }
 
@@ -924,7 +1047,6 @@ public sealed class MainViewModel : ObservableObject
         SparkWeeklyReset = FormatReset(spark?.Weekly) + StaleSuffix(snapshot.Freshness.IsSparkQuotaStale, snapshot.Freshness.SparkQuotaUpdatedAt);
 
         ApplyResetCredits(snapshot);
-        ApplyLocalUsage(snapshot.LocalMonthUsage, snapshot.Pricing);
         _localTodayUsage = snapshot.LocalTodayUsage;
         _localSevenDayUsage = snapshot.LocalSevenDayUsage;
         _localThirtyDayUsage = snapshot.LocalThirtyDayUsage;
@@ -1034,27 +1156,6 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
-    private void ApplyLocalUsage(UsageAggregation usage, PricingSnapshot pricing)
-    {
-        MonthCost = usage.EstimatedCostUsd.HasValue ? $"≈ ${usage.EstimatedCostUsd:0.00}" : IsEnglish ? "No price" : "暂无定价";
-        CacheHit = $"{usage.CacheHitPercent:0}%";
-        CacheSavings = usage.EstimatedCacheSavingsUsd.HasValue
-            ? IsEnglish ? $"Saved about ${usage.EstimatedCacheSavingsUsd:0.00}" : $"节省约 ${usage.EstimatedCacheSavingsUsd:0.00}"
-            : IsEnglish ? "No estimate" : "暂无估算";
-        PricingStatus = FormatPricingStatus(usage, pricing);
-        LocalMonthTokens = FormatDisplayTokens(usage.TotalTokens);
-
-        var composition = usage.Composition;
-        UncachedPercent = composition.UncachedInputPercent;
-        CachedPercent = composition.CachedInputPercent;
-        OutputPercent = composition.VisibleOutputPercent;
-        ReasoningPercent = composition.ReasoningPercent;
-        UncachedLegend = $"{composition.UncachedInputPercent:0.0}%  ({FormatDisplayTokens(composition.UncachedInputTokens)})";
-        CachedLegend = $"{composition.CachedInputPercent:0.0}%  ({FormatDisplayTokens(composition.CachedInputTokens)})";
-        OutputLegend = $"{composition.VisibleOutputPercent:0.0}%  ({FormatDisplayTokens(composition.VisibleOutputTokens)})";
-        ReasoningLegend = $"{composition.ReasoningPercent:0.0}%  ({FormatDisplayTokens(composition.ReasoningTokens)})";
-    }
-
     private void SelectModelRange(string range)
     {
         if (_selectedModelRange == range)
@@ -1091,11 +1192,55 @@ public sealed class MainViewModel : ObservableObject
             _ => today.AddDays(-6)
         };
         var officialDays = GetOfficialDays(from, today.AddDays(1));
-        OfficialRangeTokens = FormatOfficialTotal(officialDays);
-        OfficialRangeStatus = FormatOfficialUsageStatus(officialDays);
+        ModelRangeTokensLabel = IsEnglish ? "Official tokens · Selected period" : "官方 Tokens · 所选时段";
+        if (_selectedModelRange == "today" && officialDays.Length == 0)
+        {
+            if (_lastSnapshot is null)
+            {
+                ModelRangeTokensLabel = IsEnglish ? "Today's tokens" : "今日 Tokens";
+                OfficialRangeTokens = "—";
+                OfficialRangeStatus = IsEnglish ? "Waiting for official usage" : "等待官方用量";
+            }
+            else if (usage is { TotalTokens: > 0 })
+            {
+                var refreshedAt = _lastSnapshot.RefreshedAt;
+                ModelRangeTokensLabel = IsEnglish ? "Today's tokens · temporary local sample" : "今日 Tokens · 本地临时统计";
+                OfficialRangeTokens = $"≈ {FormatDisplayTokens(usage.TotalTokens)}";
+                OfficialRangeStatus = _lastSnapshot.Freshness.HasCurrentDailyUsageResponse
+                    ? IsEnglish
+                        ? $"Official data synced, but today's bucket is not available yet; ≈ is a temporary local rollout sample · local view refreshed {refreshedAt:HH:mm}"
+                        : $"官方已同步，但今天尚未生成；≈ 为本机 rollout 临时样本 · 本地视图刷新于 {refreshedAt:HH:mm}"
+                    : IsEnglish
+                        ? $"Official daily usage request failed; ≈ is a temporary local rollout sample · local view refreshed {refreshedAt:HH:mm}"
+                        : $"官方每日用量请求失败；≈ 为本机 rollout 临时样本 · 本地视图刷新于 {refreshedAt:HH:mm}";
+            }
+            else
+            {
+                ModelRangeTokensLabel = IsEnglish ? "Today's tokens" : "今日 Tokens";
+                OfficialRangeTokens = "—";
+                OfficialRangeStatus = _lastSnapshot.Freshness.HasCurrentDailyUsageResponse
+                    ? IsEnglish
+                        ? "Today's official data is not available yet, and there are no local samples"
+                        : "今日官方数据尚未生成，且暂无本地样本"
+                    : IsEnglish
+                        ? "Official daily usage request failed; today's official data is not available yet, and there are no local samples"
+                        : "官方每日用量请求失败；今日官方数据尚未生成，且暂无本地样本";
+            }
+        }
+        else
+        {
+            OfficialRangeTokens = FormatOfficialTotal(officialDays);
+            OfficialRangeStatus = FormatOfficialUsageStatus(officialDays);
+        }
         Models.Clear();
         if (usage is null)
         {
+            LocalModelRangeTokens = "0";
+            ModelRangeCost = "—";
+            ModelRangeCacheHit = "—";
+            ModelRangeCacheSavings = "—";
+            ModelRangeCostWithoutCaching = "—";
+            ModelPricingStatus = IsEnglish ? "Waiting for local samples" : "等待本机样本";
             HasModelRows = false;
             return;
         }
@@ -1103,7 +1248,13 @@ public sealed class MainViewModel : ObservableObject
         LocalModelRangeTokens = FormatDisplayTokens(usage.TotalTokens);
         ModelRangeCost = usage.EstimatedCostUsd.HasValue ? $"≈ ${usage.EstimatedCostUsd:0.00}" : IsEnglish ? "No price" : "暂无定价";
         ModelRangeCacheHit = $"{usage.CacheHitPercent:0}%";
-        ModelPricingStatus = FormatPricingStatus(usage, null);
+        ModelRangeCacheSavings = usage.EstimatedCacheSavingsUsd.HasValue
+            ? $"≈ ${usage.EstimatedCacheSavingsUsd:0.00}"
+            : IsEnglish ? "No estimate" : "暂无估算";
+        ModelRangeCostWithoutCaching = usage.EstimatedCostWithoutCachingUsd.HasValue
+            ? $"≈ ${usage.EstimatedCostWithoutCachingUsd:0.00}"
+            : IsEnglish ? "No price" : "暂无定价";
+        ModelPricingStatus = FormatPricingStatus(usage, _lastSnapshot?.Pricing);
         var colors = new[] { "#3B76E8", "#11A9C2", "#8667E8", "#E6A63B", "#E86C91", "#7BC2DA" };
         var modelRows = usage.Models.Take(5).ToList();
         if (usage.Models.Count > 5)
@@ -1139,19 +1290,389 @@ public sealed class MainViewModel : ObservableObject
 
     private void ApplyOfficialUsage(DashboardSnapshot snapshot)
     {
-        DailyUsage.Clear();
         var today = DateOnly.FromDateTime(snapshot.RefreshedAt.DateTime);
         var month = GetOfficialDays(new DateOnly(today.Year, today.Month, 1), today.AddDays(1));
         OfficialMonthTokens = FormatOfficialTotal(month);
         OfficialMonthStatus = FormatOfficialUsageStatus(month);
-        var peak = Math.Max(month.Select(item => item.Tokens).DefaultIfEmpty(0).Max(), 1);
-        foreach (var day in month)
+        ApplyHistorySnapshot(snapshot, today);
+    }
+
+    private void ApplyHistorySnapshot(DashboardSnapshot snapshot, DateOnly today)
+    {
+        var sameSnapshot = ReferenceEquals(_historySnapshot, snapshot);
+        HistoryMaximumDate = today.ToDateTime(TimeOnly.MinValue);
+        UpdateHistoryYears(snapshot, today);
+        if (!_historyRangeInitialized)
+        {
+            SelectedHistoryYear = today.Year;
+            SelectedHistoryMonth = today.Month;
+            HistoryCustomStartDate = new DateOnly(today.Year, today.Month, 1).ToDateTime(TimeOnly.MinValue);
+            HistoryCustomEndDate = today.ToDateTime(TimeOnly.MinValue);
+            _historyRangeInitialized = true;
+        }
+
+        OnPropertyChanged(nameof(CanSelectNextHistoryMonth));
+        if (!TryGetHistoryRange(out var start, out var end, out var validation))
+        {
+            HistoryValidationMessage = validation;
+            ClearHistoryResults(validation);
+            _historySnapshot = snapshot;
+            return;
+        }
+
+        HistoryValidationMessage = string.Empty;
+        if (_historySelectionPending)
+        {
+            HistoryRangeSummary = FormatHistoryRangeSummary(start, end);
+            ClearHistoryResults(IsEnglish ? "Selection changed · apply to view results" : "选择已更改 · 应用后查看结果");
+            _historySnapshot = snapshot;
+            return;
+        }
+        var sameRange = _historyAppliedStart == start && _historyAppliedEnd == end;
+        ApplyHistoryOfficialRange(start, end);
+        _historySnapshot = snapshot;
+        if (sameSnapshot && sameRange && _historyLocalUsage is not null)
+        {
+            ApplyHistoryLocalUsage(_historyLocalUsage);
+            return;
+        }
+
+        var currentMonthStart = new DateOnly(today.Year, today.Month, 1);
+        if (start == currentMonthStart && end == today)
+        {
+            CancelHistoryRangeQuery();
+            _historyLocalUsage = snapshot.LocalMonthUsage;
+            _historyAppliedStart = start;
+            _historyAppliedEnd = end;
+            ApplyHistoryLocalUsage(snapshot.LocalMonthUsage);
+            return;
+        }
+
+        BeginHistoryRangeQuery(start, end);
+    }
+
+    private void UpdateHistoryYears(DashboardSnapshot snapshot, DateOnly today)
+    {
+        var firstYear = snapshot.OfficialUsage?.DailyUsage.Count > 0
+            ? Math.Min(today.Year, snapshot.OfficialUsage.DailyUsage.Min(day => day.Date.Year))
+            : today.Year;
+        if (HistoryYears.Count > 0
+            && HistoryYears[0] == today.Year
+            && HistoryYears[^1] == firstYear)
+        {
+            return;
+        }
+
+        HistoryYears.Clear();
+        for (var year = today.Year; year >= firstYear; year--)
+        {
+            HistoryYears.Add(year);
+        }
+    }
+
+    private void SetHistoryMode(string mode)
+    {
+        if (_historyMode == mode)
+        {
+            return;
+        }
+
+        _historyMode = mode;
+        OnPropertyChanged(nameof(IsHistoryMonthMode));
+        OnPropertyChanged(nameof(IsHistoryCustomMode));
+        HistorySelectionChanged();
+    }
+
+    private void MoveHistoryMonth(int offset)
+    {
+        if (!_historyRangeInitialized || _selectedHistoryYear <= 0 || _selectedHistoryMonth is < 1 or > 12)
+        {
+            return;
+        }
+
+        var target = new DateOnly(_selectedHistoryYear, _selectedHistoryMonth, 1).AddMonths(offset);
+        if (_lastSnapshot is null)
+        {
+            return;
+        }
+
+        var currentMonth = new DateOnly(_lastSnapshot.RefreshedAt.Year, _lastSnapshot.RefreshedAt.Month, 1);
+        if (target > currentMonth)
+        {
+            return;
+        }
+
+        if (!HistoryYears.Contains(target.Year))
+        {
+            HistoryYears.Add(target.Year);
+        }
+
+        SetProperty(ref _selectedHistoryYear, target.Year, nameof(SelectedHistoryYear));
+        SetProperty(ref _selectedHistoryMonth, target.Month, nameof(SelectedHistoryMonth));
+        OnPropertyChanged(nameof(CanSelectNextHistoryMonth));
+        ApplyHistorySelection();
+    }
+
+    private void HistorySelectionChanged()
+    {
+        if (!_historyRangeInitialized)
+        {
+            return;
+        }
+
+        _historySelectionPending = true;
+        CancelHistoryRangeQuery();
+        OnPropertyChanged(nameof(CanSelectNextHistoryMonth));
+        if (!TryGetHistoryRange(out var start, out var end, out var validation))
+        {
+            HistoryValidationMessage = validation;
+            ClearHistoryResults(validation);
+            return;
+        }
+
+        HistoryValidationMessage = string.Empty;
+        HistoryRangeSummary = FormatHistoryRangeSummary(start, end);
+        ClearHistoryResults(IsEnglish ? "Selection changed · apply to view results" : "选择已更改 · 应用后查看结果");
+    }
+
+    private void ApplyHistorySelection()
+    {
+        if (!TryGetHistoryRange(out var start, out var end, out var validation))
+        {
+            HistoryValidationMessage = validation;
+            ClearHistoryResults(validation);
+            return;
+        }
+
+        HistoryValidationMessage = string.Empty;
+        _historySelectionPending = false;
+        ApplyHistoryOfficialRange(start, end);
+        BeginHistoryRangeQuery(start, end);
+    }
+
+    private bool TryGetHistoryRange(out DateOnly start, out DateOnly end, out string validation)
+    {
+        start = default;
+        end = default;
+        if (_lastSnapshot is null)
+        {
+            validation = IsEnglish ? "Waiting for the first refresh" : "等待首次刷新";
+            return false;
+        }
+
+        var today = DateOnly.FromDateTime(_lastSnapshot.RefreshedAt.DateTime);
+        if (IsHistoryMonthMode)
+        {
+            if (_selectedHistoryYear <= 0 || _selectedHistoryMonth is < 1 or > 12)
+            {
+                validation = IsEnglish ? "Choose a year and month" : "请选择年份和月份";
+                return false;
+            }
+
+            start = new DateOnly(_selectedHistoryYear, _selectedHistoryMonth, 1);
+            if (start > today)
+            {
+                validation = IsEnglish ? "The selected month is in the future" : "所选月份晚于当前日期";
+                return false;
+            }
+
+            end = start.Year == today.Year && start.Month == today.Month
+                ? today
+                : start.AddMonths(1).AddDays(-1);
+            validation = string.Empty;
+            return true;
+        }
+
+        if (!_historyCustomStartDate.HasValue || !_historyCustomEndDate.HasValue)
+        {
+            validation = IsEnglish ? "Choose both a start and end date" : "请选择开始日期和结束日期";
+            return false;
+        }
+
+        start = DateOnly.FromDateTime(_historyCustomStartDate.Value);
+        end = DateOnly.FromDateTime(_historyCustomEndDate.Value);
+        if (start > end)
+        {
+            validation = IsEnglish ? "The start date must not be later than the end date" : "开始日期不得晚于结束日期";
+            return false;
+        }
+
+        if (end > today)
+        {
+            validation = IsEnglish ? "The end date must not be later than the latest snapshot date" : "结束日期不得晚于最新快照日期";
+            return false;
+        }
+
+        validation = string.Empty;
+        return true;
+    }
+
+    private void ApplyHistoryOfficialRange(DateOnly start, DateOnly end)
+    {
+        var days = GetOfficialDays(start, end.AddDays(1));
+        var total = UsageCalculator.SaturatingSum(days.Select(day => day.Tokens));
+        HistoryRangeSummary = FormatHistoryRangeSummary(start, end);
+        HistoryOfficialTokens = days.Length == 0 ? "—" : FormatDisplayTokens(total);
+        HistoryOfficialReturnedDays = days.Length.ToString(CultureInfo.InvariantCulture);
+        HistoryOfficialAverageTokens = days.Length == 0
+            ? "—"
+            : FormatDisplayTokens((long)Math.Round((decimal)total / days.Length, 0, MidpointRounding.AwayFromZero));
+        var peakDay = days
+            .OrderByDescending(day => day.Tokens)
+            .ThenByDescending(day => day.Date)
+            .FirstOrDefault();
+        HistoryOfficialPeakDate = peakDay is null
+            ? "—"
+            : peakDay.Date.ToString(IsEnglish ? "MMM d, yyyy" : "yyyy年M月d日", IsEnglish ? EnglishCulture : ChineseCulture);
+        HistoryOfficialPeakTokens = peakDay is null ? "—" : FormatDisplayTokens(peakDay.Tokens);
+        HistoryOfficialStatus = FormatOfficialUsageStatus(days);
+        HasHistoryOfficialDays = days.Length > 0;
+        DailyUsage.Clear();
+        var peak = Math.Max(days.Select(day => day.Tokens).DefaultIfEmpty(0).Max(), 1);
+        foreach (var day in days)
         {
             DailyUsage.Add(new DailyUsageRowViewModel(
-                day.Date.ToString(IsEnglish ? "MMM d dddd" : "M月d日 dddd", IsEnglish ? EnglishCulture : ChineseCulture),
+                day.Date.ToString(IsEnglish ? "MMM d, yyyy dddd" : "yyyy年M月d日 dddd", IsEnglish ? EnglishCulture : ChineseCulture),
                 FormatDisplayTokens(day.Tokens),
                 (double)day.Tokens / peak * 100));
         }
+
+        _historyAppliedStart = start;
+        _historyAppliedEnd = end;
+        HistoryTrend = new HistoryTrendData(start, end, days);
+    }
+
+    private string FormatHistoryRangeSummary(DateOnly start, DateOnly end)
+    {
+        if (IsHistoryMonthMode)
+        {
+            return start.ToString(IsEnglish ? "MMMM yyyy" : "yyyy年M月", IsEnglish ? EnglishCulture : ChineseCulture);
+        }
+
+        return IsEnglish
+            ? $"{start.ToString("MMM d, yyyy", EnglishCulture)} – {end.ToString("MMM d, yyyy", EnglishCulture)} (inclusive)"
+            : $"{start:yyyy年M月d日} – {end:yyyy年M月d日}（含首尾日期）";
+    }
+
+    private void BeginHistoryRangeQuery(DateOnly start, DateOnly end)
+    {
+        CancelHistoryRangeQuery();
+        var version = ++_historyRangeVersion;
+        var cancellation = new CancellationTokenSource();
+        _historyRangeCancellation = cancellation;
+        IsHistoryRangeLoading = true;
+        _historyLocalUsage = null;
+        HistoryLocalCost = "—";
+        HistoryLocalTokens = "—";
+        HistoryLocalCacheHit = "—";
+        HistoryLocalCostWithoutCaching = "—";
+        HistoryLocalCacheSavings = "—";
+        HistoryLocalPricingStatus = IsEnglish ? "Querying the matching local calendar range…" : "正在查询相同本地日历区间…";
+        _activeHistoryRangeQuery = RunHistoryRangeQueryAsync(start, end, version, cancellation.Token);
+    }
+
+    private async Task RunHistoryRangeQueryAsync(
+        DateOnly start,
+        DateOnly end,
+        long version,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var usage = await _dashboardService.QueryLocalUsageAsync(start, end, cancellationToken);
+            lock (_lifecycleSync)
+            {
+                if (_shutdownStarted || cancellationToken.IsCancellationRequested || version != _historyRangeVersion)
+                {
+                    return;
+                }
+
+                _historyLocalUsage = usage;
+                _historyAppliedStart = start;
+                _historyAppliedEnd = end;
+                ApplyHistoryLocalUsage(usage);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A newer range or shutdown owns this cancellation.
+        }
+        catch (Exception)
+        {
+            if (version == _historyRangeVersion)
+            {
+                HistoryLocalCost = "—";
+                HistoryLocalTokens = "—";
+                HistoryLocalCacheHit = "—";
+                HistoryLocalCostWithoutCaching = "—";
+                HistoryLocalCacheSavings = "—";
+                HistoryLocalPricingStatus = IsEnglish ? "Local range query failed" : "本机区间查询失败";
+            }
+        }
+        finally
+        {
+            if (version == _historyRangeVersion)
+            {
+                IsHistoryRangeLoading = false;
+            }
+        }
+    }
+
+    private void ApplyHistoryLocalUsage(UsageAggregation usage)
+    {
+        if (usage.TotalTokens <= 0)
+        {
+            HistoryLocalCost = "—";
+            HistoryLocalTokens = "—";
+            HistoryLocalCacheHit = "—";
+            HistoryLocalCostWithoutCaching = "—";
+            HistoryLocalCacheSavings = "—";
+            HistoryLocalPricingStatus = IsEnglish
+                ? "No local rollout samples in this period"
+                : "此区间暂无本机 rollout 样本";
+            return;
+        }
+
+        HistoryLocalCost = usage.EstimatedCostUsd.HasValue ? $"≈ ${usage.EstimatedCostUsd:0.00}" : "—";
+        HistoryLocalTokens = FormatDisplayTokens(usage.TotalTokens);
+        var inputTokens = UsageCalculator.SaturatingSum(
+            [usage.Composition.UncachedInputTokens, usage.Composition.CachedInputTokens]);
+        HistoryLocalCacheHit = inputTokens > 0 ? $"{usage.CacheHitPercent:0}%" : "—";
+        HistoryLocalCostWithoutCaching = usage.EstimatedCostWithoutCachingUsd.HasValue
+            ? $"≈ ${usage.EstimatedCostWithoutCachingUsd:0.00}"
+            : "—";
+        HistoryLocalCacheSavings = usage.EstimatedCacheSavingsUsd.HasValue
+            ? $"≈ ${usage.EstimatedCacheSavingsUsd:0.00}"
+            : "—";
+        HistoryLocalPricingStatus = FormatPricingStatus(usage, _lastSnapshot?.Pricing);
+    }
+
+    private void ClearHistoryResults(string status)
+    {
+        HistoryTrend = null;
+        DailyUsage.Clear();
+        HasHistoryOfficialDays = false;
+        HistoryOfficialTokens = "—";
+        HistoryOfficialReturnedDays = "0";
+        HistoryOfficialAverageTokens = "—";
+        HistoryOfficialPeakDate = "—";
+        HistoryOfficialPeakTokens = "—";
+        HistoryOfficialStatus = status;
+        _historyLocalUsage = null;
+        HistoryLocalCost = "—";
+        HistoryLocalTokens = "—";
+        HistoryLocalCacheHit = "—";
+        HistoryLocalCostWithoutCaching = "—";
+        HistoryLocalCacheSavings = "—";
+        HistoryLocalPricingStatus = status;
+    }
+
+    private void CancelHistoryRangeQuery()
+    {
+        _historyRangeVersion++;
+        _historyRangeCancellation?.Cancel();
+        _historyRangeCancellation = null;
+        IsHistoryRangeLoading = false;
     }
 
     private DailyUsagePoint[] GetOfficialDays(DateOnly from, DateOnly to)
@@ -1202,7 +1723,9 @@ public sealed class MainViewModel : ObservableObject
     }
 
     private bool IsUsableWindow(RateLimitWindowSnapshot? window, long expectedMinutes)
-        => window?.WindowDurationMinutes == expectedMinutes && window.UsedPercent.HasValue;
+        => window?.WindowDurationMinutes == expectedMinutes
+           && window.UsedPercent.HasValue
+           && window.ResetsAt > DateTimeOffset.UtcNow;
 
     private string FormatReset(RateLimitWindowSnapshot? window)
         => window?.ResetsAt is { } reset
@@ -1404,12 +1927,23 @@ public sealed class MainViewModel : ObservableObject
             PaceWindowText = IsEnglish ? "Each segment represents 24 hours of the quota window" : "每格代表额度窗口中的 24 小时";
             ResetSummary = IsEnglish ? "Details unavailable" : "详情未返回";
             ResetNearestExpiry = IsEnglish ? "No expiry information" : "暂无到期信息";
-            PricingStatus = IsEnglish ? "Waiting for prices" : "等待价格同步";
             ResetDetailsStatus = IsEnglish ? "Not synchronized yet" : "尚未同步";
             ResetCreditEmptyText = IsEnglish ? "Reset credit details have not synchronized yet" : "尚未同步重置卡明细";
-            ModelRangeLabel = IsEnglish ? "Last 7 days" : "最近 7 天";
+            ModelRangeLabel = _selectedModelRange switch
+            {
+                "today" => IsEnglish ? "Today" : "今天",
+                "30d" => IsEnglish ? "Last 30 days" : "最近 30 天",
+                _ => IsEnglish ? "Last 7 days" : "最近 7 天"
+            };
+            ModelRangeTokensLabel = _selectedModelRange == "today"
+                ? IsEnglish ? "Today's tokens" : "今日 Tokens"
+                : IsEnglish ? "Official tokens · Selected period" : "官方 Tokens · 所选时段";
+            OfficialRangeStatus = IsEnglish ? "Waiting for official usage" : "等待官方用量";
             ResetNotificationStatus = IsEnglish ? "Waiting for validity data" : "等待获取有效期";
             ModelPricingStatus = IsEnglish ? "Waiting for prices" : "等待价格同步";
+            HistoryRangeSummary = IsEnglish ? "Waiting for refresh" : "等待刷新";
+            HistoryOfficialStatus = IsEnglish ? "Waiting for official usage" : "等待官方用量";
+            HistoryLocalPricingStatus = IsEnglish ? "Waiting for local samples" : "等待本机样本";
         }
 
         return true;

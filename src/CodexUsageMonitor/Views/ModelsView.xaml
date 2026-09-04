@@ -18,7 +18,7 @@
 
             <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
                 <StackPanel>
-                    <TextBlock Text="{DynamicResource LocOfficialRangeTokens}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
+                    <TextBlock Text="{Binding ModelRangeTokensLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                     <TextBlock Text="{Binding OfficialRangeTokens}" FontSize="31" FontWeight="SemiBold" Margin="0,3,0,0" />
                     <TextBlock Text="{Binding ModelRangeLabel}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
                     <TextBlock Text="{Binding OfficialRangeStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0" />
@@ -30,27 +30,34 @@
                 <TextBlock Text="{DynamicResource LocModelUsageDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0" />
             </StackPanel>
 
-            <Grid Margin="0,0,0,14">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="10" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Border Style="{StaticResource GlassCard}" Padding="14">
-                    <StackPanel>
-                        <TextBlock Text="{DynamicResource LocPricedModelCost}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
-                        <TextBlock Text="{Binding ModelRangeCost}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" Margin="0,3,0,0" />
-                        <TextBlock Text="{Binding ModelPricingStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
-                    </StackPanel>
-                </Border>
-                <Border Grid.Column="2" Style="{StaticResource GlassCard}" Padding="14">
-                    <StackPanel>
-                        <TextBlock Text="{DynamicResource LocCacheHit}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
-                        <TextBlock Text="{Binding ModelRangeCacheHit}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource GreenBrush}" Margin="0,3,0,0" />
-                        <TextBlock Text="{DynamicResource LocInputTokens}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
-                    </StackPanel>
-                </Border>
-            </Grid>
+            <Border x:Name="LocalRangeSummaryCard" Style="{StaticResource GlassCard}" Margin="0,0,0,14" Padding="14">
+                <StackPanel>
+                    <TextBlock Text="{Binding ModelRangeLabel}" Style="{StaticResource SectionHeader}" />
+                    <UniformGrid x:Name="LocalRangeSummaryGrid" Columns="2">
+                        <StackPanel MinHeight="66" Margin="0,0,12,8">
+                            <TextBlock Text="{DynamicResource LocLocalRangeTotalTokens}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding LocalModelRangeTokens}" FontSize="22" FontWeight="SemiBold" Margin="0,3,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel MinHeight="66" Margin="0,0,0,8">
+                            <TextBlock Text="{DynamicResource LocCurrentEstimatedCost}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding ModelRangeCost}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel MinHeight="66" Margin="0,0,12,8">
+                            <TextBlock Text="{DynamicResource LocCacheHit}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding ModelRangeCacheHit}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource GreenBrush}" Margin="0,3,0,0" />
+                        </StackPanel>
+                        <StackPanel MinHeight="66" Margin="0,0,0,8">
+                            <TextBlock Text="{DynamicResource LocCostWithoutCaching}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding ModelRangeCostWithoutCaching}" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </UniformGrid>
+                    <TextBlock x:Name="CacheSavingsRelationship" Foreground="{DynamicResource GreenBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0">
+                        <Run Text="{DynamicResource LocCacheSavings}" /><Run Text="{Binding ModelRangeCacheSavings, Mode=OneWay}" />
+                    </TextBlock>
+                    <TextBlock Text="{DynamicResource LocCostWithoutCachingHelp}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    <TextBlock Text="{Binding ModelPricingStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                </StackPanel>
+            </Border>
 
             <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
                 <StackPanel>

@@ -140,44 +140,6 @@
                 </StackPanel>
             </Border>
 
-            <StackPanel Margin="2,0,2,12">
-                <TextBlock Text="{DynamicResource LocLocalAnalysis}" FontSize="15" FontWeight="SemiBold" />
-                <TextBlock Text="{DynamicResource LocLocalAnalysisDescription}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0" />
-            </StackPanel>
-
-            <Border Style="{StaticResource GlassCard}" Margin="0,0,0,14">
-                <Grid>
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="1" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock Text="{DynamicResource LocMonthlyPricedCost}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
-                        <TextBlock Text="{Binding MonthCost}" FontSize="31" FontWeight="SemiBold" Foreground="{DynamicResource IndigoBrush}" Margin="0,3,0,0" />
-                        <TextBlock Text="{Binding PricingStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,2,12,0" />
-                    </StackPanel>
-                    <Border Grid.Column="1" Background="{DynamicResource LineBrush}" Margin="0,2" />
-                    <StackPanel Grid.Column="2" Margin="22,0,0,0">
-                        <TextBlock Text="{DynamicResource LocCacheHit}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
-                        <TextBlock Text="{Binding CacheHit}" FontSize="31" FontWeight="SemiBold" Foreground="{DynamicResource GreenBrush}" Margin="0,3,0,0" />
-                        <TextBlock Text="{Binding CacheSavings}" Foreground="{DynamicResource GreenBrush}" FontSize="11" />
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <Border Style="{StaticResource GlassCard}">
-                <StackPanel>
-                    <Grid Margin="0,0,0,10">
-                        <TextBlock Text="{DynamicResource LocMonthlyComposition}" FontWeight="SemiBold" FontSize="15" />
-                        <TextBlock Text="{Binding LocalMonthTokens}" HorizontalAlignment="Right" Foreground="{DynamicResource IndigoBrush}" FontSize="15" FontWeight="SemiBold" />
-                    </Grid>
-                    <controls:TokenCompositionBar Height="14" UncachedInput="{Binding UncachedPercent}" CachedInput="{Binding CachedPercent}" Output="{Binding OutputPercent}" Reasoning="{Binding ReasoningPercent}"
-                                                  Track="{DynamicResource ProgressTrackBrush}" />
-                    <UniformGrid Columns="4" Margin="0,10,0,0">
-                        <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="#0FA9CB" Margin="0,0,5,0" /><TextBlock Text="{DynamicResource LocUncached}" FontSize="11" /></StackPanel><TextBlock Text="{Binding UncachedLegend}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
-                        <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="{DynamicResource VioletBrush}" Margin="0,0,5,0" /><TextBlock Text="{DynamicResource LocCached}" FontSize="11" /></StackPanel><TextBlock Text="{Binding CachedLegend}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
-                        <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="{DynamicResource BlueBrush}" Margin="0,0,5,0" /><TextBlock Text="{DynamicResource LocOutput}" FontSize="11" /></StackPanel><TextBlock Text="{Binding OutputLegend}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
-                        <StackPanel><StackPanel Orientation="Horizontal"><Ellipse Width="7" Height="7" Fill="#F59E0B" Margin="0,0,5,0" /><TextBlock Text="{DynamicResource LocReasoning}" FontSize="11" /></StackPanel><TextBlock Text="{Binding ReasoningLegend}" Foreground="{DynamicResource MutedBrush}" FontSize="11" /></StackPanel>
-                    </UniformGrid>
-                </StackPanel>
-            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

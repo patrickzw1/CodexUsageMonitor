@@ -10,12 +10,12 @@ This project is released under the [MIT License](LICENSE). You may use, modify, 
 
 - General weekly quota, reset time, and consumption pace forecast based on an even seven-day allocation. When the server returns a valid five-hour window, the overview automatically shows the general five-hour quota at the top; otherwise that row is hidden.
 - Separate five-hour and weekly Spark limits. They are shown only for Pro or higher plans and only when the server returns a Spark quota.
-- Official monthly and selected-period totals sum only the daily Tokens returned by `account/usage/read`. Local model, cache, and cost analysis is shown separately and never added to official totals.
+- Official monthly, 7-day, and 30-day totals sum only the daily Tokens returned by `account/usage/read`. For Today only, when the official bucket has not appeared yet, the app may show an “≈” temporary local sample; an official value replaces it immediately and is never added to it. Local model, cache, and cost analysis remains separate.
 - Per-model Token usage, cache hit rate, and API-equivalent cost from local log samples. Estimated costs use the “≈” prefix and show public price coverage of local samples; the app does not invent prices for internal models without published pricing.
 - Model page with real time filters for Today, 7 Days, and 30 Days, ranking bars, and a usage donut chart.
 - Separate non-cached input, cached input, visible output, and reasoning Tokens without double counting.
 - On each app launch, concurrently reads the Markdown pricing tables from OpenAI's official model documentation once. A complete cache is replaced atomically only when prices for every supported model are retrieved successfully; partial results are merged for the current view only and never overwrite the complete cache.
-- Local SQLite history for daily usage in the current month, model summaries, and reset-card history. When the app starts offline or the official daily-usage method temporarily fails, it shows the most recent successful history and its timestamp.
+- Local SQLite history. The Models page keeps total local tokens, current API-equivalent cost (actual cached pricing), cache hit/savings, and the API-equivalent cost without caching for the same tokens on one Today / 7 days / 30 days selection, and identifies whether prices came from this launch, a cache, or the built-in snapshot. The History page defaults to the current month and also supports previous/next month, explicit year/month, and inclusive custom date ranges; its local-sample card compares the current cached-price cost with the no-cache cost for the same tokens. Official range totals and local samples remain separate; offline or partial daily-usage results show cached/mixed freshness, last-success time, and coverage-through date.
 - Reset-card details including available count, grant time, validity period, nearest expiration time, and locally observed grant/use/expiration events.
 - Windows tray notifications 7, 3, and 1 day before expiration. Each expiration threshold is notified at most once per app run.
 - A title-bar Settings popover switches light/dark appearance and Chinese/English, and provides an explicit “Start with Windows (in background)” switch. Preferences are stored locally and restored on the next launch; startup remains off by default and requires no administrator privileges.
@@ -72,9 +72,16 @@ The project uses semantic versioning. Git tags use `vX.Y.Z`; the version passed 
 Requires Windows 10/11 and the .NET SDK 8.0.424 pinned by the repository's `global.json`. Self-contained releases pin the .NET 8.0.30 runtime:
 
 ```powershell
-dotnet restore src\CodexUsageMonitor\CodexUsageMonitor.csproj -r win-x64 --locked-mode
-dotnet build src\CodexUsageMonitor\CodexUsageMonitor.csproj -c Release -r win-x64 --no-restore
-dotnet run --project src\CodexUsageMonitor\CodexUsageMonitor.csproj -c Release --no-restore -- --show
+dotnet restore CodexUsageMonitor.sln -r win-x64 --locked-mode
+dotnet build CodexUsageMonitor.sln
+dotnet run --project src\CodexUsageMonitor\CodexUsageMonitor.csproj -- --show
+dotnet test CodexUsageMonitor.sln -c Release -m:1 --no-restore
+```
+
+The anonymous performance regression benchmark creates only deterministic temporary JSONL and does not read a real `.codex` directory or existing `usage.db`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\measure-performance.ps1
 ```
 
 Double-clicking the app shows the window immediately. Starting it again activates the existing window instead of creating another tray instance. Clicking outside hides the window to the tray, empty title-bar space can drag it, and the minus button hides it manually. The gear opens a Settings popover over the content without moving the Overview / Models / History tabs. Left-click the tray icon to reopen it; right-click for the glass-style menu with Open, Refresh, Data Directory, and Quit actions. Use `--hidden` for silent startup, or `--page=models`, `--page=reset`, and `--page=history` to open a specific page.
@@ -102,7 +109,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 `
 
 The target computer does not need Python or a separately installed .NET Runtime. Extract the versioned ZIP and run `CodexUsageMonitor.exe`. Codex must already be installed and signed in on that computer; the app reads that computer's own local history.
 
-The public release script strictly performs locked restore → self-contained multi-file publish → optional Authenticode signing → signature verification → documentation/licenses/runtime SBOM → ZIP → SHA-256. The ZIP contains the complete EXE, DLLs, `.deps.json`, `.runtimeconfig.json`, and native runtime files. The script compares every file across publish output, staging, and ZIP and verifies that README, the project's MIT LICENSE, third-party notices, `licenses/`, release metadata, and CycloneDX SBOM all describe the same version. Full regression tests remain in the private development worktree and run before public source synchronization; neither the public repository nor the release package contains test source or test dependencies.
+The release script strictly performs locked restore → tests → self-contained multi-file publish → optional Authenticode signing → signature verification → documentation/licenses/runtime SBOM → ZIP → SHA-256. The ZIP contains the complete EXE, DLLs, `.deps.json`, `.runtimeconfig.json`, and native runtime files. The script compares every file across publish output, staging, and ZIP and verifies that README, the project's MIT LICENSE, third-party notices, `licenses/`, release metadata, and CycloneDX SBOM all describe the same version. The SBOM covers only the shipped application, runtime dependencies, and embedded font; it excludes test-only dependencies that are not distributed.
 
 If you have a signing certificate, pass absolute `-SignToolPath` and `-CertificateThumbprint` values. Signing happens before compression and final hashing. Without a certificate, the script explicitly reports `NotSigned` and never fabricates a signature.
 
@@ -122,12 +129,16 @@ Code signing proves publisher identity and file integrity, but it cannot guarant
 
 ## Accounting rules
 
-- Official monthly and selected-period Tokens are sums of official daily values in that date range, using the same source as the history list. SQLite stores the returned values and replaces an existing date on refresh; local events and lifetime summaries are never added.
-- Missing official days are not treated as zero or filled from local logs. The UI shows the returned day count, latest included date, and fetch/cache timestamp. A period with no official daily data displays “—”.
+- Official monthly, 7-day, and 30-day Tokens are sums of official daily values in that date range, using the same source as the history list. SQLite stores the returned values and replaces an existing date on refresh; local events and lifetime summaries are never added.
+- Overview no longer repeats calendar-month local-log metrics; local analysis is concentrated on Models and follows one selected period. “API-equivalent cost without caching (same tokens)” reprices cached input at the standard input rate while total tokens, output, and model mix stay unchanged. With normal public prices, it equals the current estimate plus cache savings. Both costs are public API price scenarios, not a subscription bill.
+- Both the start and end dates on the History page are inclusive, and the end cannot be later than the latest snapshot's local date. Its official range card calculates total, returned-day count, returned-day average, and peak only from days actually returned. An explicit official zero counts as one returned day; a missing day is not zero-filled.
+- The official daily card offers List / Trend chart icons, defaults to List, and remembers the choice only for this run. The straight line and faint area use real date spacing and break across missing days. Hover, or focus the chart and use Left/Right and Home/End, for exact dates and Tokens. Changed dates require Apply; refreshing or changing language does not apply pending inputs. Switching views does not query data again.
+- The separate “Local log sample” section reads existing SQLite events for the exact same local calendar range. Its 2×2 summary shows sample Tokens, current API-equivalent cost, cache hit rate, and the no-cache cost for the same Tokens; savings is an auxiliary relationship, with the same priced-model coverage and price source. The no-cache scenario only reprices cached input at the standard input rate, leaving total Tokens, output, and model mix unchanged. Changing the range does not call app-server or rewrite official daily usage, and this section is not an official bill.
+- Missing official days are not treated as zero or filled from local logs in monthly, 7-day, 30-day, or history totals. The only exception is the Models page's Today headline: while today's official bucket is absent, it can show an explicitly labelled local rollout sample; an official zero or cached value still wins, and a later official value replaces rather than adds to it.
 - Local model rankings, Token composition, cache hit rates, and API-equivalent costs are separate log-sample analysis, not a breakdown of the official total. Model shares and price coverage also use local samples as their denominator.
 - Cached input is a subset of input Tokens; non-cached input is `input - cached_input`.
 - Reasoning Tokens are a subset of output Tokens; visible output is `output - reasoning_output`.
-- Local sample Tokens use the rollout's original value. If absent, only `input + output` is used; cache and reasoning are not added again, and local counts never replace official totals.
+- Local sample Tokens use the rollout's original value. If absent, only `input + output` is used; cache and reasoning are not added again. The temporary Today headline is not persisted or counted as an official total.
 - Duplicate cumulative snapshots are removed by session and cumulative counters. A SHA-256 fingerprint is stored for every processed prefix; incremental parsing from a checkpoint is allowed only when the old prefix fingerprint still matches.
 - A first run may scan a large history. Later scans use length, last-write time, and file identity to skip unchanged sources quickly rather than rereading the entire history every 15 minutes. Truncation, file replacement, ordinary in-place rewrites, or appends with a mismatched prefix safely rebuild that source's index. A deliberate in-place modification that preserves both length and last-write time is not reread during steady-state polling; it is revalidated after a later metadata change.
 - Full rebuilds write to a staging table in batches. Formal events and checkpoints are replaced atomically in a single SQLite transaction only after parsing succeeds completely. Cancellation, I/O failure, or a process crash preserves the previous complete index.

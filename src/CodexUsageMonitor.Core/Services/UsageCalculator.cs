@@ -27,8 +27,9 @@ public static class UsageCalculator
             reasoning);
 
         var pricedRows = rows.Where(item => item.EstimatedCostUsd.HasValue).ToArray();
-        decimal? cost = pricedRows.Length == 0 ? null : pricedRows.Sum(item => item.EstimatedCostUsd!.Value);
+        decimal? cost = pricedRows.Length == 0 ? null : SaturatingDecimalSum(pricedRows.Select(item => item.EstimatedCostUsd!.Value));
         var savings = CalculateSavings(rows, prices);
+        var costWithoutCaching = CalculateCostWithoutCaching(rows, prices);
 
         return new UsageAggregation(
             rows,
@@ -36,7 +37,10 @@ public static class UsageCalculator
             SaturatingSum(rows.Select(item => item.TotalTokens)),
             cost,
             savings,
-            input <= 0 ? 0 : (double)cached / input * 100);
+            input <= 0 ? 0 : (double)cached / input * 100)
+        {
+            EstimatedCostWithoutCachingUsd = costWithoutCaching
+        };
     }
 
     public static WeeklyPace CalculateWeeklyPace(RateLimitWindowSnapshot? weekly, DateTimeOffset now)
@@ -87,9 +91,10 @@ public static class UsageCalculator
         if (TryGetPrice(model, prices, out var price))
         {
             var uncached = Math.Max(input - cached, 0);
-            cost = (uncached * price.InputPerMillion
-                    + cached * price.CachedInputPerMillion
-                    + output * price.OutputPerMillion) / 1_000_000m;
+            cost = SaturatingDecimalSum([
+                ScaledTokenCost(uncached, price.InputPerMillion),
+                ScaledTokenCost(cached, price.CachedInputPerMillion),
+                ScaledTokenCost(output, price.OutputPerMillion)]);
         }
 
         return new ModelUsageSummary(model, input, cached, output, reasoning, total, cost);
@@ -109,10 +114,52 @@ public static class UsageCalculator
             }
 
             found = true;
-            total += row.CachedInputTokens * (price.InputPerMillion - price.CachedInputPerMillion) / 1_000_000m;
+            total = SaturatingDecimalSum([total, ScaledTokenCost(
+                row.CachedInputTokens, Math.Max(price.InputPerMillion - price.CachedInputPerMillion, 0))]);
         }
 
         return found ? Math.Max(total, 0) : null;
+    }
+
+    private static decimal? CalculateCostWithoutCaching(
+        IEnumerable<ModelUsageSummary> rows,
+        IReadOnlyDictionary<string, TokenPrice> prices)
+    {
+        decimal total = 0;
+        var found = false;
+        foreach (var row in rows)
+        {
+            if (!TryGetPrice(row.Model, prices, out var price))
+            {
+                continue;
+            }
+
+            found = true;
+            total = SaturatingDecimalSum([total,
+                ScaledTokenCost(row.InputTokens, price.InputPerMillion),
+                ScaledTokenCost(row.OutputTokens, price.OutputPerMillion)]);
+        }
+
+        return found ? Math.Max(total, 0) : null;
+    }
+
+    private static decimal ScaledTokenCost(long tokens, decimal perMillion)
+    {
+        if (tokens <= 0 || perMillion <= 0) return 0;
+        try { return checked(tokens / 1_000_000m * perMillion); }
+        catch (OverflowException) { return decimal.MaxValue; }
+    }
+
+    private static decimal SaturatingDecimalSum(IEnumerable<decimal> values)
+    {
+        decimal total = 0;
+        foreach (var value in values)
+        {
+            if (value <= 0) continue;
+            try { total = checked(total + value); }
+            catch (OverflowException) { return decimal.MaxValue; }
+        }
+        return total;
     }
 
     private static bool TryGetPrice(

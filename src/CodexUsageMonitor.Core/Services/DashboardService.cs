@@ -22,6 +22,7 @@ public sealed class DashboardService : IDashboardService, IUpdateCheckSettingsSt
     private readonly TimeZoneInfo _timeZone;
     private readonly SemaphoreSlim _initializationGate = new(1, 1);
     private readonly SemaphoreSlim _settingsGate = new(1, 1);
+    private PricingSnapshot _latestPricing = PriceCatalogService.CreateBuiltInSnapshot();
     private bool _initialized;
     private int _consecutiveAppServerFailures;
     private DateTimeOffset _nextAppServerAttemptUtc = DateTimeOffset.MinValue;
@@ -62,6 +63,29 @@ public sealed class DashboardService : IDashboardService, IUpdateCheckSettingsSt
         return RefreshCoreAsync(forceAppServer, cancellationToken);
     }
 
+    public async Task<UsageAggregation> QueryLocalUsageAsync(
+        DateOnly startInclusive,
+        DateOnly endInclusive,
+        CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(_utcNow(), _timeZone).DateTime);
+        if (startInclusive > endInclusive)
+        {
+            throw new ArgumentException("The start date must not be later than the end date.", nameof(startInclusive));
+        }
+
+        if (endInclusive > today)
+        {
+            throw new ArgumentOutOfRangeException(nameof(endInclusive), "The end date must not be in the future.");
+        }
+
+        var fromUtc = UsageTimeRanges.StartOfLocalDayUtc(startInclusive, _timeZone);
+        var toUtc = UsageTimeRanges.StartOfLocalDayUtc(endInclusive.AddDays(1), _timeZone);
+        var events = await _repository.QueryEventsAsync(fromUtc, toUtc, cancellationToken);
+        return UsageCalculator.Aggregate(events, _latestPricing.Prices);
+    }
+
     private async Task<DashboardSnapshot> RefreshCoreAsync(
         bool forceAppServer,
         CancellationToken cancellationToken)
@@ -76,6 +100,7 @@ public sealed class DashboardService : IDashboardService, IUpdateCheckSettingsSt
 
         await ReadScanResultAsync(scanTask, warnings, cancellationToken);
         var pricing = await pricingTask;
+        _latestPricing = pricing;
         var appServer = await appServerTask;
 
         var storedQuota = await _repository.GetLatestQuotaSnapshotAsync(cancellationToken);
@@ -90,7 +115,8 @@ public sealed class DashboardService : IDashboardService, IUpdateCheckSettingsSt
             currentQuota?.General,
             storedQuotaValue?.General,
             completeness.GeneralFiveHourQuota,
-            completeness.GeneralWeeklyQuota);
+            completeness.GeneralWeeklyQuota,
+            nowUtc);
         var spark = completeness.SparkQuota
             ? currentQuota?.Spark
             : storedQuotaValue?.Spark ?? currentQuota?.Spark;
@@ -260,7 +286,8 @@ public sealed class DashboardService : IDashboardService, IUpdateCheckSettingsSt
                 GeneralFiveHourQuotaUpdatedAt = generalFiveHourUpdatedAt,
                 IsGeneralFiveHourQuotaStale = generalFiveHourStale,
                 GeneralWeeklyQuotaUpdatedAt = generalWeeklyUpdatedAt,
-                IsGeneralWeeklyQuotaStale = generalWeeklyStale
+                IsGeneralWeeklyQuotaStale = generalWeeklyStale,
+                HasCurrentDailyUsageResponse = appServer.HasDailyUsageResponse
             }
         };
 
@@ -280,9 +307,11 @@ public sealed class DashboardService : IDashboardService, IUpdateCheckSettingsSt
         QuotaBucketSnapshot? current,
         QuotaBucketSnapshot? stored,
         bool fiveHourComplete,
-        bool weeklyComplete)
+        bool weeklyComplete,
+        DateTimeOffset nowUtc)
     {
-        var fiveHour = fiveHourComplete ? current?.FiveHour : stored?.FiveHour ?? current?.FiveHour;
+        var storedFiveHour = stored?.FiveHour?.ResetsAt > nowUtc ? stored.FiveHour : null;
+        var fiveHour = fiveHourComplete ? current?.FiveHour : storedFiveHour ?? current?.FiveHour;
         var weekly = weeklyComplete ? current?.Weekly : stored?.Weekly ?? current?.Weekly;
         if (fiveHour is null && weekly is null)
         {

@@ -74,6 +74,7 @@ public sealed class CodexAppServerClient : ICodexAppServerClient
         var resetCountComplete = false;
         var resetDetailsComplete = false;
         var usageSummaryComplete = false;
+        var hasDailyUsageResponse = false;
         var dailyUsageComplete = false;
         var successfulMethodCount = 0;
         var initialized = false;
@@ -166,6 +167,7 @@ public sealed class CodexAppServerClient : ICodexAppServerClient
                     await ReadResultAsync(process, stdout, 4, deadline.Token));
                 usage = usageResult.Snapshot;
                 usageSummaryComplete = usageResult.SummaryComplete;
+                hasDailyUsageResponse = usageResult.DailyUsageRecognized;
                 dailyUsageComplete = usageResult.DailyUsageComplete;
                 successfulMethodCount++;
             }
@@ -238,6 +240,7 @@ public sealed class CodexAppServerClient : ICodexAppServerClient
                 resetDetailsComplete,
                 usageSummaryComplete,
                 dailyUsageComplete),
+            HasDailyUsageResponse = hasDailyUsageResponse,
             SuccessfulMethodCount = successfulMethodCount,
             ProcessFailure = !initialized
         };

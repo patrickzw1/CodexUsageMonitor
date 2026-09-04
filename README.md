@@ -10,12 +10,12 @@ Windows 原生系统托盘应用，用本地 Codex 记录和官方 `codex app-se
 
 - 通用每周额度、重置时间与按 7 天平均的消耗速度预测；服务端返回有效的 5 小时窗口时，在总览顶部自动显示通用 5 小时额度，否则整行隐藏。
 - Spark 独立的 5 小时/每周额度；只对 Pro 及以上账户显示，并且必须由服务端返回 Spark 配额。
-- 官方月度和所选时段总量只汇总 `account/usage/read` 返回的每日 Token；本地模型、缓存与成本分析独立显示，不混入官方总量。
+- 官方月度、7 天和 30 天总量只汇总 `account/usage/read` 返回的每日 Token；“今天”在官方当天桶尚未生成时可显示带“≈”的本地临时统计，官方值到达后立即替换且绝不相加。本地模型、缓存与成本分析仍独立显示。
 - 按本地日志样本统计模型 Token、缓存命中率和 API 等价成本；成本使用“≈”标记，并显示本地样本的公开价格覆盖率，不给未公开定价的内部模型猜价格。
 - 模型页支持“今天 / 7 天 / 30 天”真实时间筛选、排行进度条和用量环形图。
 - 区分非缓存输入、缓存输入、可见输出和推理 Token，避免重复相加。
 - 每次应用运行时并发读取一次 OpenAI 官方模型文档的 Markdown 价格表；只有全部支持模型都成功时才原子更新完整缓存，部分成功只用于本次合并展示，不覆盖完整缓存。
-- SQLite 保存本地历史，支持本月每日用量、模型汇总和重置卡历史；离线启动或官方每日用量暂时失败时显示最近成功历史及其时间。
+- SQLite 保存本地历史；模型页将今天 / 最近 7 天 / 最近 30 天所选区间的本地总 Token、当前 API 等价成本（按实际缓存价）、缓存命中、缓存节省和“同等 Token 不使用缓存时”的 API 等价成本集中显示，并明确标注价格来自本次启动获取、缓存或内置快照。历史页默认当前月，也可按月前后切换、显式选择年/月或选择含首尾的自定义日期区间；相同日历区间的本机样本卡同样比较当前缓存价成本与同等 Token 无缓存成本。官方区间汇总与本地样本始终分开；离线启动或官方每日用量暂时失败时显示缓存/混合新鲜度、最近成功时间及覆盖截至日期。
 - 重置卡详情显示可用次数、授予时间、有效期、最近到期时间，以及本地观察到的发放/使用/过期记录。
 - 可在到期前 7 天、3 天和 1 天发送 Windows 托盘通知；同一到期阈值在单次运行中只提醒一次。
 - 顶栏设置浮层可切换浅色/暗黑模式、中文/英文，并可明确开启“开机自动启动（后台运行）”；偏好保存在本地并在下次启动时恢复，自启动默认关闭且不需要管理员权限。
@@ -72,9 +72,16 @@ Get-Content .\SHA256SUMS.txt
 需要 Windows 10/11 和仓库 `global.json` 固定的 .NET SDK 8.0.424。自包含发布运行时固定为 .NET 8.0.30：
 
 ```powershell
-dotnet restore src\CodexUsageMonitor\CodexUsageMonitor.csproj -r win-x64 --locked-mode
-dotnet build src\CodexUsageMonitor\CodexUsageMonitor.csproj -c Release -r win-x64 --no-restore
-dotnet run --project src\CodexUsageMonitor\CodexUsageMonitor.csproj -c Release --no-restore -- --show
+dotnet restore CodexUsageMonitor.sln -r win-x64 --locked-mode
+dotnet build CodexUsageMonitor.sln
+dotnet run --project src\CodexUsageMonitor\CodexUsageMonitor.csproj -- --show
+dotnet test CodexUsageMonitor.sln -c Release -m:1 --no-restore
+```
+
+匿名性能回归基准只生成确定性的临时 JSONL，不读取真实 `.codex` 或现有 `usage.db`：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\measure-performance.ps1
 ```
 
 双击启动时会直接显示窗口；重复启动会唤醒已有窗口，不会创建多个托盘实例。点击窗口外会自动收起到托盘，标题区空白位置可拖动窗口，右上角减号可手动收起，齿轮按钮会在导航上方打开设置浮层，不会移动“总览 / 模型 / 历史”标签。左键托盘图标可重新打开，右键会显示玻璃风格菜单，可打开、刷新、访问数据目录或退出。需要开机静默启动时使用 `--hidden`；`--page=models`、`--page=reset` 和 `--page=history` 可直接打开对应页面。
@@ -102,7 +109,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 `
 
 目标电脑无需安装 Python 或 .NET Runtime；解压版本化 ZIP 后直接运行 `CodexUsageMonitor.exe`。目标电脑需要已经登录并能运行 Codex；统计会读取该电脑自己的本地历史。
 
-公开仓库的发布脚本严格执行 locked restore → self-contained 多文件 publish → 可选 Authenticode 签名 → 签名校验 → 文档/许可证/发布运行时 SBOM → ZIP → SHA-256。ZIP 包含完整 EXE、DLL、`.deps.json`、`.runtimeconfig.json` 和原生运行时文件；脚本逐文件验证 publish、打包暂存目录与 ZIP 内容一致，并确认 README、项目 MIT LICENSE、第三方 NOTICE、`licenses/`、release metadata 和 CycloneDX SBOM 均为同一版本。完整回归测试保留在私有开发工作树中，并在公开源码同步前执行；公开仓库及发布包均不包含测试源码或测试依赖。
+发布脚本严格执行 locked restore → tests → self-contained 多文件 publish → 可选 Authenticode 签名 → 签名校验 → 文档/许可证/发布运行时 SBOM → ZIP → SHA-256。ZIP 包含完整 EXE、DLL、`.deps.json`、`.runtimeconfig.json` 和原生运行时文件；脚本逐文件验证 publish、打包暂存目录与 ZIP 内容一致，并确认 README、项目 MIT LICENSE、第三方 NOTICE、`licenses/`、release metadata 和 CycloneDX SBOM 均为同一版本。该 SBOM 只描述实际发布的应用、运行时依赖和内嵌字体，不包含未随包分发的测试依赖。
 
 如有签名证书，可传入绝对 `-SignToolPath` 与 `-CertificateThumbprint`；签名发生在压缩和最终哈希之前。没有证书时脚本明确报告 `NotSigned`，不会伪造签名。
 
@@ -123,7 +130,11 @@ powershell -ExecutionPolicy Bypass -File scripts\build-release.ps1 `
 ## 统计口径
 
 - “官方本月 Tokens”和模型页“官方 Tokens”仅为对应日期范围内官方每日返回值之和，与历史页每日列表使用相同数据源。SQLite 只存储官方返回值，同一天刷新时覆盖旧值，不把本地事件或历史累计汇总再加进去。
-- 官方没有返回的日期不按零处理，也不用本地日志补齐；界面显示已返回天数、截至日期及获取/缓存时间，整个时段无官方日数据时显示“—”。
+- 总览不再重复展示自然月本地日志统计；本地分析集中在模型页并全部跟随同一个时间选择。“同等 Token 不使用缓存时”的 API 等价成本只把缓存输入改按普通输入价，总 Token、输出和模型组合保持不变；在正常公开价格下，它等于当前估算加缓存节省。两种成本都是公开 API 单价情景估算，不是订阅账单。
+- 历史页按月或自定义区间的开始、结束日期均包含在内；结束日期不能晚于最新快照的本地日期。官方区间卡只对实际返回日计算合计、返回天数、平均值和峰值；官方明确返回的零值计作一天，缺失日期则不补零。
+- 官方每日卡右上角可切换列表/趋势图，默认列表，选择仅在本次运行保留。趋势图按真实日期间隔显示折线和浅色面积，缺失日期断开；悬停或聚焦后用左右方向键、Home/End 查看准确日期与 Token。修改日期后需点击“应用区间”，刷新或切语言不会替你应用待确认的日期；切换图形不会新增数据查询。
+- 历史页“本地日志样本”对完全相同的本地日历区间单独读取现有 SQLite 事件，以 2×2 显示样本 Token、当前 API 等价成本、缓存命中与同等 Token 无缓存成本，缓存节省作为辅助关系行，并继续显示同一组已定价模型的覆盖率和价格来源。无缓存情景只把缓存输入改按普通输入价，总 Token、输出和模型组合不变；切换区间不会请求 app-server 或改写官方日用量，这部分也不代表官方账单。
+- 官方没有返回的日期不按零处理，也不用本地日志补齐月度、7 天、30 天或历史；界面显示已返回天数、截至日期及获取/缓存时间。唯一例外是模型页“今天”：当天官方桶缺失时显示明确标注的本机 rollout 临时样本，官方零值或缓存值仍优先，后续官方值到达后直接替换而不相加。
 - 本地模型排行、Token 组成、缓存命中和 API 等价成本属于独立的日志样本分析，不是官方总量的拆分；模型占比和定价覆盖率的分母也仅是本地样本。
 - 缓存输入是输入 Token 的子集；非缓存输入为 `input - cached_input`。
 - 推理 Token 是输出 Token 的子集；可见输出为 `output - reasoning_output`。

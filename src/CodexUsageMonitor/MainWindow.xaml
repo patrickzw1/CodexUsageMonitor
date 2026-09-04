@@ -83,7 +83,7 @@
                 <Grid Grid.Row="2">
                     <views:OverviewView Visibility="{Binding IsOverviewVisible, Converter={StaticResource BoolToVisibility}}" />
                     <views:ModelsView Visibility="{Binding IsModelsVisible, Converter={StaticResource BoolToVisibility}}" />
-                    <views:HistoryView Visibility="{Binding IsHistoryVisible, Converter={StaticResource BoolToVisibility}}" />
+                    <views:HistoryView x:Name="HistoryPage" Visibility="{Binding IsHistoryVisible, Converter={StaticResource BoolToVisibility}}" />
                 </Grid>
 
                 <Border Grid.Row="3" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource ChromeBrush}">

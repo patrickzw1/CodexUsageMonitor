@@ -169,6 +169,7 @@
         <Style x:Key="SectionHeader" TargetType="TextBlock">
             <Setter Property="FontSize" Value="15" />
             <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
             <Setter Property="Margin" Value="0,0,0,10" />
         </Style>
 
@@ -358,6 +359,7 @@
         </Style>
 
         <Style x:Key="ButtonPrimary" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+            <Setter Property="ContentTemplate" Value="{StaticResource ButtonTextContentTemplate}" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
@@ -597,7 +599,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="14" Margin="2">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14" Margin="2">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
@@ -634,6 +636,19 @@
             <Setter Property="FontSize" Value="12" />
         </Style>
 
+        <Style x:Key="HistoryRangeToggle" TargetType="ToggleButton" BasedOn="{StaticResource RangeToggle}">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ButtonSecondaryBorderBrush}" />
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True"><Setter Property="BorderBrush" Value="Transparent" /></Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="HistoryViewToggle" TargetType="RadioButton" BasedOn="{StaticResource HistoryRangeToggle}">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
+        </Style>
+
         <Style x:Key="SettingsChoice" TargetType="ToggleButton" BasedOn="{StaticResource SegmentedTab}">
             <Setter Property="Height" Value="34" />
             <Setter Property="FontSize" Value="12" />
@@ -667,6 +682,263 @@
                                 <Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" />
                                 <Setter TargetName="Root" Property="Opacity" Value="{StaticResource ControlDisabledOpacity}" />
                             </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HistoryComboBoxItem" TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="Root" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" Padding="{TemplateBinding Padding}" CornerRadius="{StaticResource ControlCornerRadius}">
+                            <ContentPresenter x:Name="Label" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource SelectionBrush}" /><Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource AccentBrush}" /></Trigger>
+                            <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource SelectionHoverBrush}" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Root" Property="Opacity" Value="{StaticResource ControlDisabledOpacity}" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HistoryComboBox" TargetType="ComboBox">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Padding" Value="9,5" />
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+            <Setter Property="Background" Value="{DynamicResource InsetBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ButtonSecondaryBorderBrush}" />
+            <Setter Property="BorderThickness" Value="{StaticResource ControlBorderThickness}" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource HistoryComboBoxItem}" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="DropDownToggle" Focusable="False" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" ClickMode="Press">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Root" Background="{DynamicResource InsetBrush}" BorderBrush="{DynamicResource ButtonSecondaryBorderBrush}" BorderThickness="{StaticResource ControlBorderThickness}" CornerRadius="{StaticResource ControlCornerRadius}">
+                                            <Path Margin="0,0,12,0" HorizontalAlignment="Right" VerticalAlignment="Center" Data="M 0,0 L 4,4 L 8,0" Stroke="{DynamicResource InkBrush}" StrokeThickness="1.5" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource HoverBrush}" /></Trigger>
+                                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource PressedBrush}" /></Trigger>
+                                            <Trigger Property="IsChecked" Value="True"><Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource AccentBrush}" /></Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="Label" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" Margin="10,5,32,5" VerticalAlignment="Center" IsHitTestVisible="False" />
+                            <Border x:Name="FocusRing" BorderBrush="{DynamicResource AccentFocusBrush}" BorderThickness="2" CornerRadius="{StaticResource ControlCornerRadius}" Visibility="Collapsed" IsHitTestVisible="False" />
+                            <Popup x:Name="PART_Popup" IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Placement="Bottom" AllowsTransparency="True" Focusable="False" StaysOpen="False">
+                                <Border Background="{DynamicResource FlyoutSurfaceBrush}" BorderBrush="{DynamicResource FlyoutBorderBrush}" BorderThickness="1" CornerRadius="{StaticResource ControlCornerRadius}" Padding="4" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ScrollViewer MaxHeight="252" CanContentScroll="True" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"><ItemsPresenter /></ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="FocusRing" Property="Visibility" Value="Visible" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="DropDownToggle" Property="Opacity" Value="{StaticResource ControlDisabledOpacity}" /><Setter TargetName="Label" Property="Opacity" Value="{StaticResource ControlDisabledOpacity}" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="DatePickerTextBox">
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+            <Setter Property="Background" Value="{DynamicResource InsetBrush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="CaretBrush" Value="{DynamicResource InkBrush}" />
+            <Setter Property="SelectionBrush" Value="{DynamicResource AccentSubtleBrush}" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DatePickerTextBox">
+                        <Grid Background="Transparent">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="WatermarkStates">
+                                    <VisualState x:Name="Unwatermarked" />
+                                    <VisualState x:Name="Watermarked"><Storyboard><DoubleAnimation Storyboard.TargetName="PART_Watermark" Storyboard.TargetProperty="Opacity" To="1" Duration="0" /></Storyboard></VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" />
+                            <ContentControl x:Name="PART_Watermark" Opacity="0" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" IsHitTestVisible="False" Focusable="False">
+                                <ContentControl.ContentTemplate><DataTemplate><TextBlock Text="{Binding}" Foreground="{DynamicResource MutedBrush}" /></DataTemplate></ContentControl.ContentTemplate>
+                            </ContentControl>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HistoryCalendarDayButton" TargetType="CalendarDayButton">
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
+            <Setter Property="MinWidth" Value="36" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CalendarDayButton">
+                        <Grid Margin="1">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CalendarButtonFocusStates">
+                                    <VisualState x:Name="CalendarButtonUnfocused" />
+                                    <VisualState x:Name="CalendarButtonFocused"><Storyboard><DoubleAnimation Storyboard.TargetName="FocusRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0" /></Storyboard></VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <Border x:Name="Root" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="{StaticResource ControlCornerRadius}" />
+                            <TextBlock x:Name="Label" Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border x:Name="FocusRing" Opacity="0" BorderBrush="{DynamicResource AccentFocusBrush}" BorderThickness="2" CornerRadius="{StaticResource ControlCornerRadius}" IsHitTestVisible="False" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsInactive" Value="True"><Setter Property="Foreground" Value="{DynamicResource MutedBrush}" /></Trigger>
+                            <Trigger Property="IsToday" Value="True"><Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource AccentBrush}" /><Setter TargetName="Label" Property="FontWeight" Value="Bold" /></Trigger>
+                            <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource SelectionBrush}" /></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource SelectionHoverBrush}" /></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource PressedBrush}" /></Trigger>
+                            <Trigger Property="IsSelected" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" /></Trigger>
+                            <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsSelected" Value="True" /><Condition Property="IsMouseOver" Value="True" /></MultiTrigger.Conditions><Setter TargetName="Root" Property="Background" Value="{DynamicResource AccentHoverBrush}" /></MultiTrigger>
+                            <MultiTrigger><MultiTrigger.Conditions><Condition Property="IsSelected" Value="True" /><Condition Property="IsPressed" Value="True" /></MultiTrigger.Conditions><Setter TargetName="Root" Property="Background" Value="{DynamicResource AccentPressedBrush}" /></MultiTrigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusRing" Property="Opacity" Value="1" /></Trigger>
+                            <Trigger Property="IsBlackedOut" Value="True"><Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" /><Setter TargetName="Label" Property="TextDecorations" Value="Strikethrough" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HistoryCalendarButton" TargetType="CalendarButton">
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
+            <Setter Property="Height" Value="60" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CalendarButton">
+                        <Grid Margin="2">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CalendarButtonFocusStates">
+                                    <VisualState x:Name="CalendarButtonUnfocused" />
+                                    <VisualState x:Name="CalendarButtonFocused"><Storyboard><DoubleAnimation Storyboard.TargetName="FocusRing" Storyboard.TargetProperty="Opacity" To="1" Duration="0" /></Storyboard></VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <Border x:Name="Root" Background="Transparent" CornerRadius="{StaticResource ControlCornerRadius}" />
+                            <TextBlock x:Name="Label" Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border x:Name="FocusRing" Opacity="0" BorderBrush="{DynamicResource AccentFocusBrush}" BorderThickness="2" CornerRadius="{StaticResource ControlCornerRadius}" IsHitTestVisible="False" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsInactive" Value="True"><Setter Property="Foreground" Value="{DynamicResource MutedBrush}" /></Trigger>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource SelectionHoverBrush}" /></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource PressedBrush}" /></Trigger>
+                            <Trigger Property="HasSelectedDays" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" /></Trigger>
+                            <MultiTrigger><MultiTrigger.Conditions><Condition Property="HasSelectedDays" Value="True" /><Condition Property="IsMouseOver" Value="True" /></MultiTrigger.Conditions><Setter TargetName="Root" Property="Background" Value="{DynamicResource AccentHoverBrush}" /></MultiTrigger>
+                            <MultiTrigger><MultiTrigger.Conditions><Condition Property="HasSelectedDays" Value="True" /><Condition Property="IsPressed" Value="True" /></MultiTrigger.Conditions><Setter TargetName="Root" Property="Background" Value="{DynamicResource AccentPressedBrush}" /></MultiTrigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusRing" Property="Opacity" Value="1" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource DisabledTextBrush}" /></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HistoryCalendarItem" TargetType="CalendarItem">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CalendarItem">
+                        <ControlTemplate.Resources>
+                            <DataTemplate x:Key="{x:Static CalendarItem.DayTitleTemplateResourceKey}"><TextBlock Text="{Binding}" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /></DataTemplate>
+                        </ControlTemplate.Resources>
+                        <Grid x:Name="PART_Root" Width="266">
+                            <Grid.RowDefinitions><RowDefinition Height="36" /><RowDefinition Height="252" /></Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="36" /><ColumnDefinition /><ColumnDefinition Width="36" /></Grid.ColumnDefinitions>
+                            <Button x:Name="PART_PreviousButton" Style="{StaticResource IconButton}" Focusable="False"><Path Width="6" Height="10" Data="M 6,0 L 0,5 L 6,10" Stroke="{DynamicResource InkBrush}" StrokeThickness="1.5" /></Button>
+                            <Button x:Name="PART_HeaderButton" Grid.Column="1" Style="{StaticResource ButtonTertiary}" ContentTemplate="{StaticResource ButtonTextContentTemplate}" Focusable="False" FontWeight="SemiBold" />
+                            <Button x:Name="PART_NextButton" Grid.Column="2" Style="{StaticResource IconButton}" Focusable="False"><Path Width="6" Height="10" Data="M 0,0 L 6,5 L 0,10" Stroke="{DynamicResource InkBrush}" StrokeThickness="1.5" /></Button>
+                            <Grid x:Name="PART_MonthView" Grid.Row="1" Grid.ColumnSpan="3">
+                                <Grid.RowDefinitions><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition /></Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                            </Grid>
+                            <Grid x:Name="PART_YearView" Grid.Row="1" Grid.ColumnSpan="3" Visibility="Hidden">
+                                <Grid.RowDefinitions><RowDefinition /><RowDefinition /><RowDefinition /></Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                            </Grid>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding DisplayMode, RelativeSource={RelativeSource AncestorType=Calendar}}" Value="Year">
+                                <Setter TargetName="PART_MonthView" Property="Visibility" Value="Hidden" />
+                                <Setter TargetName="PART_YearView" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding DisplayMode, RelativeSource={RelativeSource AncestorType=Calendar}}" Value="Decade">
+                                <Setter TargetName="PART_MonthView" Property="Visibility" Value="Hidden" />
+                                <Setter TargetName="PART_YearView" Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HistoryCalendar" TargetType="Calendar">
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+            <Setter Property="Background" Value="{DynamicResource FlyoutSurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FlyoutBorderBrush}" />
+            <Setter Property="CalendarDayButtonStyle" Value="{StaticResource HistoryCalendarDayButton}" />
+            <Setter Property="CalendarButtonStyle" Value="{StaticResource HistoryCalendarButton}" />
+            <Setter Property="CalendarItemStyle" Value="{StaticResource HistoryCalendarItem}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Calendar">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="{StaticResource FlyoutCornerRadius}" Padding="10">
+                            <CalendarItem x:Name="PART_CalendarItem" Style="{TemplateBinding CalendarItemStyle}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HistoryDatePicker" TargetType="DatePicker">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
+            <Setter Property="Background" Value="{DynamicResource InsetBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ButtonSecondaryBorderBrush}" />
+            <Setter Property="BorderThickness" Value="{StaticResource ControlBorderThickness}" />
+            <Setter Property="CalendarStyle" Value="{StaticResource HistoryCalendar}" />
+            <Setter Property="SelectedDateFormat" Value="Short" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocusVisual}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DatePicker">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{StaticResource ControlCornerRadius}">
+                            <Grid x:Name="PART_Root">
+                                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="36" /></Grid.ColumnDefinitions>
+                                <DatePickerTextBox x:Name="PART_TextBox" Margin="9,0,2,0" Foreground="{TemplateBinding Foreground}" />
+                                <Button x:Name="PART_Button" Grid.Column="1" Style="{StaticResource IconButton}" Width="34" Height="34" Focusable="False" AutomationProperties.Name="{DynamicResource LocHistorySelectDate}">
+                                    <Path x:Name="CalendarIcon" Width="16" Height="16" Data="M 1,3 L 15,3 L 15,15 L 1,15 Z M 1,7 L 15,7 M 5,1 L 5,5 M 11,1 L 11,5" Stroke="{DynamicResource InkBrush}" StrokeThickness="1.3" />
+                                </Button>
+                                <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" Focusable="False" />
+                                <Border x:Name="FocusRing" Grid.ColumnSpan="2" BorderBrush="{DynamicResource AccentFocusBrush}" BorderThickness="2" CornerRadius="{StaticResource ControlCornerRadius}" Visibility="Collapsed" IsHitTestVisible="False" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Root" Property="Background" Value="{DynamicResource HoverBrush}" /></Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="FocusRing" Property="Visibility" Value="Visible" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Root" Property="Opacity" Value="{StaticResource ControlDisabledOpacity}" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>

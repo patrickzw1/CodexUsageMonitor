@@ -14,6 +14,7 @@ public sealed record QuotaParseResult(
 public sealed record OfficialUsageParseResult(
     OfficialUsageSnapshot? Snapshot,
     bool SummaryComplete,
+    bool DailyUsageRecognized,
     bool DailyUsageComplete);
 
 public static class AppServerResponseParser
@@ -66,6 +67,12 @@ public static class AppServerResponseParser
 
         var general = generalElement.HasValue ? ParseBucket(generalElement.Value, "codex") : null;
         var spark = sparkElement.HasValue ? ParseBucket(sparkElement.Value, "spark") : null;
+        var generalWeeklyComplete = general?.Weekly is not null && IsCompleteWindow(general.Weekly);
+        var generalFiveHourComplete = general?.FiveHour is not null && IsCompleteWindow(general.FiveHour)
+                                      || general?.FiveHour is null
+                                      && generalWeeklyComplete
+                                      && generalElement.HasValue
+                                      && HasOnlyRecognizableQuotaWindows(generalElement.Value);
 
         int? availableCount = null;
         var countComplete = false;
@@ -131,14 +138,45 @@ public static class AppServerResponseParser
             : new QuotaSnapshot(general, spark, availableCount, detailsComplete, credits);
         return new QuotaParseResult(
             snapshot,
-            general?.FiveHour is not null && IsCompleteWindow(general.FiveHour),
-            general?.Weekly is not null && IsCompleteWindow(general.Weekly),
+            generalFiveHourComplete,
+            generalWeeklyComplete,
             spark is not null
             && (spark.FiveHour is not null || spark.Weekly is not null)
             && (spark.FiveHour is null || IsCompleteWindow(spark.FiveHour))
             && (spark.Weekly is null || IsCompleteWindow(spark.Weekly)),
             countComplete,
             countComplete && detailsComplete);
+    }
+
+    private static bool HasOnlyRecognizableQuotaWindows(JsonElement bucket)
+    {
+        var recognized = false;
+        foreach (var name in new[] { "primary", "secondary" })
+        {
+            if (!bucket.TryGetProperty(name, out var value))
+            {
+                continue;
+            }
+
+            recognized = true;
+            if (value.ValueKind == JsonValueKind.Null)
+            {
+                continue;
+            }
+
+            if (value.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            var window = ParseWindow(value);
+            if (!IsCompleteWindow(window) || window.WindowDurationMinutes is not (300 or 10_080))
+            {
+                return false;
+            }
+        }
+
+        return recognized;
     }
 
     public static OfficialUsageParseResult ParseOfficialUsageDetailed(JsonElement result)
@@ -194,6 +232,7 @@ public static class AppServerResponseParser
             && peak.HasValue
             && currentStreak.HasValue
             && longestStreak.HasValue,
+            hasDailyArray,
             hasDailyArray && daily.Count > 0 && dailyRowsValid);
     }
 
